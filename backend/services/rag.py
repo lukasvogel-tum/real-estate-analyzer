@@ -25,15 +25,39 @@ def generate_answer(vectorstore, query: str):
     
     retriever = vectorstore.as_retriever()
     
+    # 1. Dokumente abrufen
+    docs = retriever.invoke(query)
+    
+    if not docs:
+        return {
+            "answer": "Ich konnte keine relevanten Informationen in den Dokumenten finden.",
+            "evidence": []
+        }
+    
     def format_docs(docs):
         return "\n\n".join(doc.page_content for doc in docs)
     
     # Modern LCEL RAG Chain (avoids langchain.chains)
     rag_chain = (
-        {"context": retriever | format_docs, "input": RunnablePassthrough()}
+        {"context": lambda x: format_docs(docs), "input": RunnablePassthrough()}
         | prompt
         | llm
         | StrOutputParser()
     )
 
-    return rag_chain.invoke(query)
+    answer = rag_chain.invoke(query)
+    
+    # Evidence strukturieren: Quelle und Textausschnitt (Chunk) zurückgeben
+    evidence = []
+    for doc in docs:
+        text = doc.page_content.strip()
+        excerpt = text[:100] + "..." if len(text) > 100 else text
+        evidence.append({
+            "source": doc.metadata.get("source", "Unbekannt"),
+            "excerpt": excerpt
+        })
+    
+    return {
+        "answer": answer,
+        "evidence": evidence
+    }

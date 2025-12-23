@@ -89,6 +89,6 @@ async def chat_with_project(request: ChatRequest):
         return {"error": f"Project '{request.project_name}' not found or has no indexed documents."}
 
     # 2. Antwort generieren
-    answer = generate_answer(vectorstore, request.query)
+    result = generate_answer(vectorstore, request.query)
     
-    return {"answer": answer}
+    return result
