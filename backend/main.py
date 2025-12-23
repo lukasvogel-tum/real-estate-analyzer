@@ -1,175 +1,94 @@
-from fastapi import FastAPI, File, UploadFile, Form
-from pydantic import BaseModel
 import os
-import chromadb
+from dotenv import load_dotenv
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+# Services
+from services.vectorstore import add_documents_to_project, get_vectorstore
+from services.rag import generate_answer
+
+# Utils
+from utils.text_splitter import split_text
 from utils.extract_file import extract_text_from_file
-from utils.embeddings import embed_text
-from utils.text_splitter import split_into_chunks
 
+load_dotenv()
 
-# ---- Chroma-Client ----
-chroma_client = chromadb.Client()
-collection = chroma_client.get_or_create_collection("documents")
-
-
-class ProjectCreateRequest(BaseModel):
-    project_id: str
-
-
-# FastAPI-App starten
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# --- Datamodell für Chat-Anfragen ---
-class ChatRequest(BaseModel):
-    message: str          # die Nachricht vom Benutzer
-    project_id: str | None = None  # später für "pro Immobilie"
-
-
-class SearchRequest(BaseModel):
-    query: str
-    project_id: str
-    top_k: int = 3
-
-
-# --- Routen ---
-@app.post("/create_project")
-def create_project(req: ProjectCreateRequest):
-
-    project_path = os.path.join("projects", req.project_id)
-    files_path = os.path.join(project_path, "files")
-    text_path = os.path.join(project_path, "text")
-
-    # Ordnerstruktur anlegen
-    os.makedirs(files_path, exist_ok=True)
-    os.makedirs(text_path, exist_ok=True)
-
-    return {
-        "message": f"Projekt '{req.project_id}' wurde erstellt.",
-        "folders": [files_path, text_path]
-    }
-
-
-@app.get("/")
-def read_root():
-    return {"message": "Backend läuft!"}
-
-
-@app.post("/chat")
-def chat(req: ChatRequest):
-    """
-    Simulierter Chat-Endpunkt.
-    Später kommt hier OpenAI, RAG usw. rein.
-    """
-    if req.project_id:
-        return {"answer": f"Du fragst zum Projekt '{req.project_id}': {req.message}"}
-    else:
-        return {"answer": f"Du fragst allgemein: {req.message}"}
-    
-@app.post("/search")
-def search(req: SearchRequest):
-    """
-    Sucht in den gespeicherten Dokumenten eines Projekts
-    nach ähnlichen Stellen zur Query.
-    """
-
-    # 1) Query in Embedding umwandeln
-    query_embedding = embed_text(req.query)
-    
-    # 2) Chroma abfragen – nur in diesem Projekt
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=req.top_k,
-        where={"project_id": req.project_id}
-    )
-
-    # 3) Chroma-Ergebnis etwas hübscher machen
-    docs = results.get("documents", [[]])[0]
-    metas = results.get("metadatas", [[]])[0]
-    dists = results.get("distances", [[]])[0] if "distances" in results else [None] * len(docs)
-
-    hits = []
-    for doc, meta, dist in zip(docs, metas, dists):
-        hits.append({
-            "text": doc,
-            "filename": meta.get("filename") if meta else None,
-            "project_id": meta.get("project_id") if meta else None,
-            "distance": float(dist) if dist is not None else None
-        })
-
-    return {
-        "query": req.query,
-        "project_id": req.project_id,
-        "results": hits
-    }
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
 
 @app.post("/upload")
-async def upload_file(
-    project_id: str = Form(...),
-    file: UploadFile = File(...)
-):
-    """
-    Speichert eine Datei im Projekt, extrahiert Text,
-    erzeugt ein Embedding und speichert alles in Chroma.
-    """
+async def upload_files(files: list[UploadFile] = File(...), project_name: str = Form(...)):
+    if not project_name:
+        return {"error": "Project name is required"}
 
-    # Projektpfade
-    project_path = os.path.join("projects", project_id)
-    files_path = os.path.join(project_path, "files")
-    text_path = os.path.join(project_path, "text")
+    project_path = os.path.join("projects", project_name, "files")
+    text_path = os.path.join("projects", project_name, "text")
 
-    # Prüfen, ob Projekt existiert
-    if not os.path.exists(project_path):
-        return {
-            "error": (
-                f"Projekt '{project_id}' existiert nicht. "
-                f"Bitte zuerst /create_project verwenden."
-            )
-        }
-
-    # Datei speichern
-    file_path = os.path.join(files_path, file.filename)
-    os.makedirs(files_path, exist_ok=True)
+    os.makedirs(project_path, exist_ok=True)
     os.makedirs(text_path, exist_ok=True)
 
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
+    if not files or len(files) == 0:
+        return {"error": "No files provided"}
 
-   # Text extrahieren
-    extracted_text = extract_text_from_file(file_path)
+    extracted_texts = []
+    metadatas = []
 
-    # --- Text in Chunks zerlegen ---
-    chunks = split_into_chunks(extracted_text, chunk_size=500, overlap=100)
+    for file in files:
+        # 1. Datei speichern
+        file_path = os.path.join(project_path, file.filename)
+        with open(file_path, "wb") as f:
+            f.write(await file.read())
 
-    # Für jeden Chunk Embedding erzeugen und speichern
-    for i, chunk in enumerate(chunks):
-        embedding = embed_text(chunk)
+        # 2. Text extrahieren
+        text = extract_text_from_file(file_path)
+        extracted_texts.append(text)
+        metadatas.append({"source": file.filename})
+        
+        # (Optional) Text-Backup speichern
+        text_file_path = os.path.join(text_path, f"{file.filename}.txt")
+        with open(text_file_path, "w", encoding="utf-8") as f:
+            f.write(text)
 
-        collection.add(
-            documents=[chunk],
-            embeddings=[embedding],
-            ids=[f"{project_id}_{file.filename}_chunk{i}"],
-            metadatas=[{
-                "project_id": project_id,
-                "filename": file.filename,
-                "chunk_index": i
-            }]
-    )
+    # 3. Text in Chunks splitten
+    documents = split_text(extracted_texts, metadatas=metadatas)
 
-
-    # Textspeicherung
-    text_file_path = os.path.join(text_path, f"{file.filename}.txt")
-    with open(text_file_path, "w", encoding="utf-8") as t:
-        t.write(extracted_text)
+    # 4. Embeddings erzeugen und in LanceDB speichern
+    add_documents_to_project(project_name, documents)
 
     return {
-        "message": (
-            f"Datei '{file.filename}' wurde erfolgreich "
-            f"im Projekt '{project_id}' gespeichert."
-        ),
-        "saved_file": file_path,
-        "saved_text": text_file_path,
-        "text_preview": extracted_text[:500],
-        "embedding_size": len(embedding)
+        "message": "Files uploaded, processed and indexed successfully", 
+        "project_name": project_name,
+        "chunks_created": len(documents)
     }
+
+
+class ChatRequest(BaseModel):
+    project_name: str
+    query: str
+
+@app.post("/chat")
+async def chat_with_project(request: ChatRequest):
+    if not request.project_name:
+        return {"error": "Project name is required"}
+
+    # 1. VectorStore laden (ohne Files neu zu lesen)
+    vectorstore = get_vectorstore(request.project_name)
+    
+    if not vectorstore:
+        return {"error": f"Project '{request.project_name}' not found or has no indexed documents."}
+
+    # 2. Antwort generieren
+    answer = generate_answer(vectorstore, request.query)
+    
+    return {"answer": answer}
