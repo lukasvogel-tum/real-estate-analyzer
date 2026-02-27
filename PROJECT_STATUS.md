@@ -246,4 +246,6 @@ Noch offen fuer robustes MVP im Einsatz:
 - Bevorzugt werden klare, wartbare Loesungen statt unnoetig komplexer "cleverer" Implementierungen.
 - Architektur- und API-Entscheidungen werden konsistent gehalten und bei Aenderungen in diesem Dokument aktualisiert.
 - Wenn eine Best-Practice-Loesung unnoetig kompliziert waere, wird eine pragmatische Zwischenstufe gewaehlt und als naechster Schritt markiert.
+- Branch-First ist Standard: Entwicklung in `feat/*`, `fix/*`, `chore/*`, Merge nach `main` ueber PR.
+- Direkte Commits auf `main` nur in klar begruendeten Ausnahmefaellen (z. B. akuter Hotfix).
 
