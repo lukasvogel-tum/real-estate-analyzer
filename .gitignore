@@ -135,3 +135,18 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Project runtime artifacts (local only)
+backend/lancedb/
+backend/projects/**/files/
+backend/projects/**/text/
+backend/projects/_registry.json
+projects/
+*.lance
+*.txn
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
