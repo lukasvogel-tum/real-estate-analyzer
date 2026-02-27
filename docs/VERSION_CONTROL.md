@@ -9,6 +9,12 @@ Nachvollziehbare, sichere und release-faehige Entwicklung mit kleinen, reviewbar
 - Bugfix-Branches: `fix/<scope>-<short-description>`
 - Hotfix-Branches: `hotfix/<scope>-<short-description>`
 
+## Verbindlicher Arbeitsmodus (ab sofort)
+- Keine direkten Commits auf `main` fuer normale Entwicklungsarbeit.
+- Jede fachliche oder technische Aenderung startet in einem kurzlebigen Branch.
+- Auch bei Solo-Entwicklung: Merge nach `main` nur ueber PR mit kurzer Self-Review.
+- Ausnahme nur mit expliziter Entscheidung: akuter Hotfix oder minimale Docs-Korrektur.
+
 ## Commit Standard (Conventional Commits)
 Format:
 `<type>(<scope>): <summary>`
