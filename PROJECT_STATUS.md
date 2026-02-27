@@ -1,4 +1,4 @@
-# Real Estate Analyzer - Produkt- und Projektstatus
+﻿# Real Estate Analyzer - Produkt- und Projektstatus
 
 ## Zweck dieses Dokuments
 Dieses Dokument ist die zentrale, laufend gepflegte Referenz fuer:
@@ -236,3 +236,13 @@ Noch offen fuer robustes MVP im Einsatz:
 - Keine grossen Refactors ohne explizites OK
 - Nach jeder Aenderung: kurze Testanleitung (Uvicorn + Postman)
 - Dieses Dokument bei jeder relevanten Aenderung aktualisieren
+
+---
+
+## 4) Verbindliche Leitlinie fuer die Zusammenarbeit
+- Ziel ist ein `industry standard`, `state of the art` Projekt, das gleichzeitig fuer dich nachvollziehbar und lernbar bleibt.
+- Jede relevante Aenderung wird mit kurzem `Warum` dokumentiert (Trade-off, Alternative, Entscheidung).
+- Bevorzugt werden klare, wartbare Loesungen statt unnoetig komplexer "cleverer" Implementierungen.
+- Architektur- und API-Entscheidungen werden konsistent gehalten und bei Aenderungen in diesem Dokument aktualisiert.
+- Wenn eine Best-Practice-Loesung unnoetig kompliziert waere, wird eine pragmatische Zwischenstufe gewaehlt und als naechster Schritt markiert.
+
