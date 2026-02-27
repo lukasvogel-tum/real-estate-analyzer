@@ -1,8 +1,12 @@
+import os
+
 import lancedb
 from langchain_community.vectorstores import LanceDB
+
 from utils.embeddings import get_embeddings
 
-DB_PATH = "./lancedb"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(BASE_DIR, "lancedb")
 
 def get_table_name(project_name: str) -> str:
     """Erzeugt einen sicheren Tabellennamen aus dem Projektnamen."""

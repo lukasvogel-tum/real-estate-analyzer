@@ -114,7 +114,7 @@ Stand: 2026-02-25
   - Datei `backend/projects/_registry.json`
   - Felder: `project_name`, `project_type`, `created_at`, `updated_at`
 - Auto-Discovery:
-  - Bestehende Projekte aus `projects/` Ordnern
+  - Bestehende Projekte aus `backend/projects/` Ordnern
   - Bestehende LanceDB-Tabellen
 - Endpoints:
   - `GET /projects` fuer Projektliste inkl. Basisstatistiken
@@ -133,6 +133,7 @@ Stand: 2026-02-25
 - `backend/services/vectorstore.py`
   - Projekt-Tabellen in LanceDB
   - Laden/Hinzufuegen von Dokumenten
+  - Persistenter DB-Pfad ist explizit auf `backend/lancedb` verankert (kein CWD-Zufall)
   - Schema-Konflikt-Fallback (Drop + Rebuild)
 - `backend/services/rag.py`
   - Retrieval + LCEL-Chain

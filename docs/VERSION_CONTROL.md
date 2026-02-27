@@ -51,11 +51,12 @@ Erlaubte Typen:
 
 ## Datenhygiene
 Folgende Dateien bleiben lokal und werden nicht versioniert:
+- `lancedb/` (Legacy-Rootpfad)
 - `backend/lancedb/`
 - `backend/projects/**/files/`
 - `backend/projects/**/text/`
 - `backend/projects/_registry.json`
-- `projects/`
+- `projects/` (Legacy-Rootpfad)
 
 ## Team-Workflow (empfohlen)
 1. `git checkout main && git pull`

@@ -12,6 +12,8 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ### Changed
 - Upload endpoint validates `project_type` and persists project metadata.
 - Git ignore rules now exclude local runtime/project artifacts.
+- Vector store storage path is now consistently anchored to `backend/lancedb` (absolute path).
 
 ### Removed
 - Runtime artifacts from version control tracking (kept locally).
+- Legacy root-level artifacts `export_codebase.py`, `codebase.txt`, and top-level `__init__.py`.
