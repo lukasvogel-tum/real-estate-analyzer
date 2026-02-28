@@ -11,3 +11,6 @@ lancedb
 pypdf
 tiktoken
 langchain-text-splitters
+python-docx
+openpyxl
+python-pptx
