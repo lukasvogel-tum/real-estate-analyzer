@@ -5,6 +5,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from services.metadata_db import add_document_record, init_metadata_db
 from services.project_registry import (
     get_project,
     list_projects,
@@ -31,6 +32,11 @@ app.add_middleware(
 )
 
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+
+
+@app.on_event("startup")
+def startup_event() -> None:
+    init_metadata_db()
 
 
 @app.post("/upload")
@@ -61,6 +67,7 @@ async def upload_files(
 
     extracted_texts = []
     metadatas = []
+    uploaded_file_records = []
 
     for file in files:
         file_path = os.path.join(project_path, file.filename)
@@ -70,12 +77,40 @@ async def upload_files(
         try:
             text = extract_text_from_file(file_path)
         except ValueError as exc:
+            try:
+                add_document_record(
+                    project_name=project_name,
+                    source_filename=file.filename,
+                    stored_file_path=file_path,
+                    stored_text_path="",
+                    file_size_bytes=os.path.getsize(file_path) if os.path.exists(file_path) else None,
+                    chunks_indexed=0,
+                    extraction_status="error",
+                    error_message=str(exc),
+                    project_type=effective_project_type,
+                )
+            except Exception:
+                pass
             raise HTTPException(
                 status_code=422,
                 detail=f"Failed to process '{file.filename}': {exc}",
             )
 
         if not text or not text.strip():
+            try:
+                add_document_record(
+                    project_name=project_name,
+                    source_filename=file.filename,
+                    stored_file_path=file_path,
+                    stored_text_path="",
+                    file_size_bytes=os.path.getsize(file_path) if os.path.exists(file_path) else None,
+                    chunks_indexed=0,
+                    extraction_status="error",
+                    error_message="Extracted text is empty.",
+                    project_type=effective_project_type,
+                )
+            except Exception:
+                pass
             raise HTTPException(
                 status_code=422,
                 detail=f"Failed to process '{file.filename}': extracted text is empty.",
@@ -94,12 +129,44 @@ async def upload_files(
         with open(text_file_path, "w", encoding="utf-8") as text_file:
             text_file.write(text)
 
+        uploaded_file_records.append(
+            {
+                "source_filename": file.filename,
+                "stored_file_path": file_path,
+                "stored_text_path": text_file_path,
+                "file_size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else None,
+            }
+        )
+
     documents = split_text(extracted_texts, metadatas=metadatas)
     add_documents_to_project(
         project_name=project_name,
         documents=documents,
         project_type=effective_project_type,
     )
+
+    chunks_per_source: dict[str, int] = {}
+    for doc in documents:
+        source = (doc.metadata or {}).get("source")
+        if source:
+            chunks_per_source[source] = chunks_per_source.get(source, 0) + 1
+
+    for record in uploaded_file_records:
+        try:
+            add_document_record(
+                project_name=project_name,
+                source_filename=record["source_filename"],
+                stored_file_path=record["stored_file_path"],
+                stored_text_path=record["stored_text_path"],
+                file_size_bytes=record["file_size_bytes"],
+                chunks_indexed=chunks_per_source.get(record["source_filename"], 0),
+                extraction_status="indexed",
+                error_message=None,
+                project_type=effective_project_type,
+            )
+        except Exception:
+            # Upload flow should continue even if metadata DB is temporarily unavailable.
+            pass
 
     return {
         "message": "Files uploaded, processed and indexed successfully",

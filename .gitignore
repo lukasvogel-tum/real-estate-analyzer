@@ -142,6 +142,8 @@ backend/lancedb/
 backend/projects/**/files/
 backend/projects/**/text/
 backend/projects/_registry.json
+backend/metadata.db
+backend/metadata.db-*
 projects/
 *.lance
 *.txn

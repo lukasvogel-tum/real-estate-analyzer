@@ -60,10 +60,13 @@ Phase 3 (Agent-Layer):
 - Backend: Python + FastAPI
 - Frontend: Next.js (App Router) + TypeScript
 - RAG: LangChain (LCEL)
+- Metadata DB: SQLAlchemy (Postgres-ready, lokaler SQLite-Fallback fuer MVP)
 - Vector DB: LanceDB (lokal persistent)
 - Embeddings: OpenAI (`OPENAI_API_KEY` via Windows ENV)
 - Chunking: RecursiveCharacterTextSplitter
 - Testing/Clients: Postman
+- Deployment (langfristig):
+  - Docker Compose als moegliche Deployment-Option fuer kontrollierte Umgebungen
 - Spaeter:
   - Frontend: Vercel Deployment
   - CI/CD: GitLab
@@ -94,6 +97,7 @@ Stand: 2026-02-28
 - Indexiert Chunks in LanceDB pro Projekt-Tabelle
 - Spiegelt Chunks zusaetzlich in shared Tabelle `realestate_global` (Option B)
 - Schreibt/Aktualisiert Projekt-Metadaten in `backend/projects/_registry.json`
+- Schreibt Upload- und Dateimetadaten in SQL Metadata DB (`projects`, `documents`)
 - Chunk-Metadaten aktuell:
   - `source` (Dateiname)
   - `project_name`
@@ -167,6 +171,10 @@ Stand: 2026-02-28
   - Projekt-Typ validieren
   - Projekte discovern/listen/detaillieren
   - Projektstatistiken aggregieren
+- `backend/services/metadata_db.py`
+  - SQLAlchemy Engine + Schema fuer `projects` und `documents`
+  - Postgres-kompatibel via `DATABASE_URL` (MVP default: lokale SQLite DB)
+  - Upload-Metadaten und Projekt-Metadaten persistieren
 - `backend/utils/extract_file.py`
   - Dateiextraktion (PDF, DOCX, XLSX, PPTX, TXT, MD, CSV)
 - `backend/utils/text_splitter.py`
@@ -274,6 +282,7 @@ Bereits vorhanden:
 - Projektbezogener Upload + persistente Vektorindexierung
 - Projektbezogener Chat mit nachvollziehbarer Evidenz
 - Frontend-MVP fuer Upload, Projektliste, Projekt-Chat und Workspace-Scopes
+- Metadata-DB-Layer fuer Projekte und Upload-Dokumente (SQLAlchemy)
 
 Noch offen fuer robustes MVP im Einsatz:
 - Einheitliche Error-Struktur auf allen Endpunkten
