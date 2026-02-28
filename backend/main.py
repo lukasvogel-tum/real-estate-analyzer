@@ -67,7 +67,20 @@ async def upload_files(
         with open(file_path, "wb") as saved_file:
             saved_file.write(await file.read())
 
-        text = extract_text_from_file(file_path)
+        try:
+            text = extract_text_from_file(file_path)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Failed to process '{file.filename}': {exc}",
+            )
+
+        if not text or not text.strip():
+            raise HTTPException(
+                status_code=422,
+                detail=f"Failed to process '{file.filename}': extracted text is empty.",
+            )
+
         extracted_texts.append(text)
         metadatas.append(
             {

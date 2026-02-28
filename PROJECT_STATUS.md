@@ -58,6 +58,7 @@ Phase 3 (Agent-Layer):
 
 ### 1.4 Ziel-Tech-Stack
 - Backend: Python + FastAPI
+- Frontend: Next.js (App Router) + TypeScript
 - RAG: LangChain (LCEL)
 - Vector DB: LanceDB (lokal persistent)
 - Embeddings: OpenAI (`OPENAI_API_KEY` via Windows ENV)
@@ -81,7 +82,11 @@ Stand: 2026-02-28
 - Speichert Dateien unter `backend/projects/<project>/files/`
 - Extrahiert Text:
   - PDF via `PyPDFLoader`
-  - Sonst Plain-Text Read
+  - DOCX via `python-docx`
+  - XLSX via `openpyxl`
+  - PPTX via `python-pptx`
+  - TXT/MD via Plain-Text Read
+  - CSV via `csv` parser
 - Speichert Text-Backup unter `backend/projects/<project>/text/`
 - Chunkt mit `RecursiveCharacterTextSplitter`:
   - `chunk_size=1000`
@@ -163,11 +168,19 @@ Stand: 2026-02-28
   - Projekte discovern/listen/detaillieren
   - Projektstatistiken aggregieren
 - `backend/utils/extract_file.py`
-  - Dateiextraktion (PDF + Plain Text)
+  - Dateiextraktion (PDF, DOCX, XLSX, PPTX, TXT, MD, CSV)
 - `backend/utils/text_splitter.py`
   - Text zu `Document`-Chunks
 - `backend/utils/embeddings.py`
   - OpenAI Embeddings Initialisierung
+- `frontend/app/*`
+  - UI-Routing fuer Projects, Project Detail und Workspace
+- `frontend/components/UploadForm.tsx`
+  - Upload-Flow fuer projektbezogenes Indexing
+- `frontend/components/ScopeChatPanel.tsx`
+  - Scope-Chat UI fuer `project`, `realestate_global`, `global`
+- `frontend/lib/api.ts`
+  - API-Client fuer FastAPI-Endpoints
 
 ### 2.3 Aktuelle API-Contracts
 
@@ -181,6 +194,9 @@ Stand: 2026-02-28
   - `project_name`
   - `project_type`
   - `chunks_created`
+- Fehler:
+  - `422` bei unsupported Dateityp
+  - `422` bei leerer/fehlgeschlagener Extraktion
 
 #### `POST /chat`
 - Input: JSON
@@ -257,6 +273,7 @@ Stand: 2026-02-28
 Bereits vorhanden:
 - Projektbezogener Upload + persistente Vektorindexierung
 - Projektbezogener Chat mit nachvollziehbarer Evidenz
+- Frontend-MVP fuer Upload, Projektliste, Projekt-Chat und Workspace-Scopes
 
 Noch offen fuer robustes MVP im Einsatz:
 - Einheitliche Error-Struktur auf allen Endpunkten
