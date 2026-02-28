@@ -1,9 +1,10 @@
-from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
-from langchain_core.output_parsers import StrOutputParser
+from langchain_openai import ChatOpenAI
 
 DEFAULT_EXCERPT_LENGTH = 400
+DEFAULT_MODEL = "gpt-4o-mini"
 
 
 def _build_excerpt(text: str, max_length: int = DEFAULT_EXCERPT_LENGTH) -> str:
@@ -22,7 +23,15 @@ def _parse_score(score):
         return None
 
 
-def _retrieve_documents_with_scores(vectorstore, query: str, top_k: int):
+def _build_source_label(metadata: dict) -> str:
+    source = metadata.get("source", "Unbekannt")
+    project_name = metadata.get("project_name")
+    if project_name:
+        return f"{project_name}/{source}"
+    return source
+
+
+def retrieve_documents_with_scores(vectorstore, query: str, top_k: int):
     try:
         return vectorstore.similarity_search_with_relevance_scores(query, k=top_k)
     except Exception:
@@ -31,10 +40,8 @@ def _retrieve_documents_with_scores(vectorstore, query: str, top_k: int):
         return [(doc, None) for doc in docs]
 
 
-def generate_answer(vectorstore, query: str, top_k: int = 4):
-    """Erzeugt eine nachvollziehbare Antwort inkl. Sources und Evidence."""
-
-    llm = ChatOpenAI(temperature=0.7, model_name="gpt-4o-mini")
+def _generate_llm_answer(query: str, context: str) -> str:
+    llm = ChatOpenAI(temperature=0.7, model_name=DEFAULT_MODEL)
 
     system_prompt = (
         "Du bist ein erfahrener Immobilien-Experte. "
@@ -51,17 +58,6 @@ def generate_answer(vectorstore, query: str, top_k: int = 4):
         ]
     )
 
-    retrieved_documents = _retrieve_documents_with_scores(vectorstore, query, top_k)
-    if not retrieved_documents:
-        return {
-            "answer": "Ich konnte keine relevanten Informationen in den Dokumenten finden.",
-            "sources": [],
-            "evidence": [],
-        }
-
-    docs = [doc for doc, _score in retrieved_documents]
-    context = "\n\n".join(doc.page_content for doc in docs)
-
     rag_chain = (
         {"context": lambda _x: context, "input": RunnablePassthrough()}
         | prompt
@@ -69,7 +65,20 @@ def generate_answer(vectorstore, query: str, top_k: int = 4):
         | StrOutputParser()
     )
 
-    answer = rag_chain.invoke(query)
+    return rag_chain.invoke(query)
+
+
+def generate_answer_from_documents(query: str, retrieved_documents):
+    """Erzeugt eine Antwort basierend auf bereits abgerufenen Treffern."""
+    if not retrieved_documents:
+        return {
+            "answer": "Ich konnte keine relevanten Informationen in den Dokumenten finden.",
+            "sources": [],
+            "evidence": [],
+        }
+
+    context = "\n\n".join(doc.page_content for doc, _score in retrieved_documents)
+    answer = _generate_llm_answer(query, context)
 
     sources = []
     seen_sources = set()
@@ -77,15 +86,18 @@ def generate_answer(vectorstore, query: str, top_k: int = 4):
 
     for doc, score in retrieved_documents:
         metadata = doc.metadata or {}
-        source = metadata.get("source", "Unbekannt")
+        source_label = _build_source_label(metadata)
 
-        if source not in seen_sources:
-            seen_sources.add(source)
-            sources.append(source)
+        if source_label not in seen_sources:
+            seen_sources.add(source_label)
+            sources.append(source_label)
 
         evidence.append(
             {
-                "source": source,
+                "source": source_label,
+                "file_name": metadata.get("source", "Unbekannt"),
+                "project_name": metadata.get("project_name"),
+                "project_type": metadata.get("project_type"),
                 "excerpt": _build_excerpt(doc.page_content),
                 "chunk_id": metadata.get("chunk_id"),
                 "score": _parse_score(score),
@@ -97,3 +109,9 @@ def generate_answer(vectorstore, query: str, top_k: int = 4):
         "sources": sources,
         "evidence": evidence,
     }
+
+
+def generate_answer(vectorstore, query: str, top_k: int = 4):
+    """Erzeugt eine nachvollziehbare Antwort inkl. Sources und Evidence."""
+    retrieved_documents = retrieve_documents_with_scores(vectorstore, query, top_k)
+    return generate_answer_from_documents(query, retrieved_documents)
