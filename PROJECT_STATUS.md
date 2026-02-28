@@ -205,6 +205,7 @@ Stand: 2026-02-28
 - Fehler:
   - `422` bei unsupported Dateityp
   - `422` bei leerer/fehlgeschlagener Extraktion
+  - `422` bei Parserfehlern (z. B. defektes/verschluesseltes PDF) mit konkreter Fehlermeldung
 
 #### `POST /chat`
 - Input: JSON
@@ -297,6 +298,10 @@ Noch offen fuer robustes MVP im Einsatz:
 - Keine grossen Refactors ohne explizites OK
 - Nach jeder Aenderung: kurze Testanleitung (Uvicorn + Postman)
 - Dieses Dokument bei jeder relevanten Aenderung aktualisieren
+
+### 3.1 Laufzeit-Config (wichtig)
+- `CORS_ALLOW_ORIGINS` kann genutzt werden, um erlaubte Frontend-Origin(s) zu steuern.
+- Default fuer lokale Entwicklung: `http://localhost:3000,http://127.0.0.1:3000`
 
 ---
 

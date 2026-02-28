@@ -27,6 +27,8 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Branch-first workflow is now explicitly mandatory in project guidelines.
 - Upload indexing now mirrors project chunks into shared table `realestate_global`.
 - Upload now returns explicit `422` errors for unsupported file types or failed extraction.
+- Upload processing now catches parser exceptions consistently and returns actionable error details instead of opaque failures.
+- Backend CORS defaults now allow both `http://localhost:3000` and `http://127.0.0.1:3000` (override via `CORS_ALLOW_ORIGINS`).
 
 ### Removed
 - Runtime artifacts from version control tracking (kept locally).

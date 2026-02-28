@@ -60,6 +60,8 @@ export default function UploadForm({
     } catch (uploadError) {
       if (uploadError instanceof ApiError) {
         setError(uploadError.detail);
+      } else if (uploadError instanceof Error) {
+        setError(uploadError.message);
       } else {
         setError("Upload failed due to an unknown error.");
       }

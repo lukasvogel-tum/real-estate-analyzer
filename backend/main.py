@@ -22,10 +22,15 @@ load_dotenv()
 
 app = FastAPI()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CORS_ALLOW_ORIGINS = os.getenv(
+    "CORS_ALLOW_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000",
+)
+ALLOW_ORIGINS = [origin.strip() for origin in CORS_ALLOW_ORIGINS.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=ALLOW_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -76,7 +81,7 @@ async def upload_files(
 
         try:
             text = extract_text_from_file(file_path)
-        except ValueError as exc:
+        except Exception as exc:
             try:
                 add_document_record(
                     project_name=project_name,
