@@ -5,7 +5,7 @@ from typing import Any
 
 import lancedb
 
-from services.vectorstore import DB_PATH, get_table_name
+from services.vectorstore import DB_PATH, REALESTATE_GLOBAL_TABLE, get_table_name
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECTS_DIR = os.path.join(BACKEND_DIR, "projects")
@@ -103,7 +103,9 @@ def _discover_project_names(table_names: set[str]) -> set[str]:
         for entry in os.scandir(PROJECTS_DIR):
             if entry.is_dir():
                 discovered.add(entry.name)
-    return discovered.union(table_names)
+
+    filtered_table_names = {name for name in table_names if name != REALESTATE_GLOBAL_TABLE}
+    return discovered.union(filtered_table_names)
 
 
 def _base_project_entry(project_name: str, now_iso: str) -> dict[str, Any]:

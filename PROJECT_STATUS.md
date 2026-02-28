@@ -30,7 +30,8 @@ Ein professioneller Family-Office-Real-Estate Assistant mit:
 ### 1.2 Ziel-Funktionsumfang
 Phase 1 (MVP-RAG, jetzt relevant):
 - Dokumente hochladen, extrahieren, chunken, indexieren (projektbezogen)
-- Projektbezogener Chat mit nachvollziehbarer Antwort:
+- Scope-basierter Chat mit nachvollziehbarer Antwort:
+  - `scope`: `project` | `realestate_global` | `global` (MVP: `global` nutzt Immobilien-Index)
   - `answer`
   - `sources` (dedupliziert)
   - `evidence` (Auszuege aus echten Retrieval-Treffern)
@@ -70,7 +71,7 @@ Phase 3 (Agent-Layer):
 
 ## 2) Ist-Stand (Heute)
 
-Stand: 2026-02-25
+Stand: 2026-02-28
 
 ### 2.1 Implementierte Kernfunktionen
 
@@ -86,25 +87,37 @@ Stand: 2026-02-25
   - `chunk_size=1000`
   - `chunk_overlap=100`
 - Indexiert Chunks in LanceDB pro Projekt-Tabelle
+- Spiegelt Chunks zusaetzlich in shared Tabelle `realestate_global` (Option B)
 - Schreibt/Aktualisiert Projekt-Metadaten in `backend/projects/_registry.json`
 - Chunk-Metadaten aktuell:
   - `source` (Dateiname)
+  - `project_name`
+  - `project_type`
 
 #### Chat-RAG (`POST /chat`)
 - Request:
-  - `project_name` (string)
   - `query` (string)
+  - `scope` (`project` | `realestate_global` | `global`, default `project`)
+  - `project_name` (string, Pflicht wenn `scope=project`)
   - `top_k` (optional, default `4`, valid `1..10`)
 - Verhalten:
-  - Laedt projektbezogenen VectorStore
-  - Bei unbekanntem Projekt: HTTP `404`
+  - Scope `project`: nutzt projektspezifischen VectorStore
+  - Scope `realestate_global`: nutzt shared Tabelle `realestate_global`
+  - Scope `global`: nutzt fuer MVP denselben shared Immobilien-Index
+  - Fallback: falls shared Tabelle noch nicht vorhanden ist, Fanout-Retrieval ueber alle Projekt-Tabellen
+  - Bei unbekanntem Projekt oder fehlenden Daten: HTTP `404`
   - Retrieval mit `top_k` (bevorzugt mit Relevance Scores, sonst Fallback ohne Score)
   - Antwortgenerierung via LCEL + `gpt-4o-mini`
 - Response:
   - `answer`
+  - `scope`
+  - `effective_scope`
   - `sources` (dedupliziert, stabile Reihenfolge)
   - `evidence[]` mit:
     - `source`
+    - `file_name`
+    - `project_name`
+    - `project_type`
     - `excerpt` (max 400 Zeichen)
     - `chunk_id` (falls in Metadaten vorhanden, sonst `null`)
     - `score` (falls verfuegbar, sonst `null`)
@@ -118,7 +131,9 @@ Stand: 2026-02-25
   - Bestehende LanceDB-Tabellen
 - Endpoints:
   - `GET /projects` fuer Projektliste inkl. Basisstatistiken
+  - `GET /projects/list` als Alias (Postman-kompatibel)
   - `GET /projects/{project_name}` fuer Projekt-Detailinfos
+  - `GET /projects/info?project_name=...` als Alias (Postman-kompatibel)
 - Projekt-Statistiken im Response:
   - `files_count`
   - `text_backups_count`
@@ -132,12 +147,16 @@ Stand: 2026-02-25
   - Request-Validierung und Orchestrierung
 - `backend/services/vectorstore.py`
   - Projekt-Tabellen in LanceDB
+  - Shared Immobilien-Index `realestate_global`
   - Laden/Hinzufuegen von Dokumenten
   - Persistenter DB-Pfad ist explizit auf `backend/lancedb` verankert (kein CWD-Zufall)
   - Schema-Konflikt-Fallback (Drop + Rebuild)
 - `backend/services/rag.py`
-  - Retrieval + LCEL-Chain
+  - Retrieval + LCEL-Chain (VectorStore oder vorab aggregierte Treffer)
   - Evidence- und Source-Aufbereitung
+- `backend/services/scope_retriever.py`
+  - Scope-Normalisierung und Scope-Routing fuer Chat
+  - Fallback-Retrieval ueber mehrere Projekt-Tabellen
 - `backend/services/project_registry.py`
   - Registry-Datei lesen/schreiben
   - Projekt-Typ validieren
@@ -167,6 +186,7 @@ Stand: 2026-02-25
 - Input: JSON
 ```json
 {
+  "scope": "project",
   "project_name": "TestProject",
   "query": "Welche Risiken und Chancen hat das Objekt?",
   "top_k": 4
@@ -176,10 +196,15 @@ Stand: 2026-02-25
 ```json
 {
   "answer": "...",
-  "sources": ["file1.pdf", "file2.pdf"],
+  "scope": "project",
+  "effective_scope": "project",
+  "sources": ["TestProject/file1.pdf", "TestProject/file2.pdf"],
   "evidence": [
     {
-      "source": "file1.pdf",
+      "source": "TestProject/file1.pdf",
+      "file_name": "file1.pdf",
+      "project_name": "TestProject",
+      "project_type": "potenziell",
       "excerpt": "...",
       "chunk_id": null,
       "score": 0.87
@@ -189,6 +214,7 @@ Stand: 2026-02-25
 ```
 - Fehler:
   - `404` bei unbekanntem Projekt/fehlender Tabelle
+  - `404` bei leerem shared Scope ohne Indexdaten
   - `422` bei ungueltigen Inputs (z. B. `top_k` ausserhalb `1..10`)
 
 #### `GET /projects`
@@ -218,6 +244,14 @@ Stand: 2026-02-25
 - Fehler:
   - `404` wenn Projekt nicht gefunden
   - `422` bei leerem Projektnamen
+
+#### `GET /projects/list`
+- Alias auf `GET /projects` (gleiches Response-Schema)
+
+#### `GET /projects/info`
+- Query-Param:
+  - `project_name` (string, Pflicht)
+- Alias auf `GET /projects/{project_name}` (gleiches Response-Schema)
 
 ### 2.4 MVP-Readiness (kurz)
 Bereits vorhanden:
