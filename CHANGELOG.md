@@ -15,6 +15,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
   - Projects page (list + upload)
   - Project detail page (project-scoped chat)
   - Workspace page (`realestate_global` + `global` chats)
+- SQL metadata database layer (`projects`, `documents`) via SQLAlchemy.
+- Upload metadata persistence (file paths, size, extraction status, chunks indexed).
+- Postgres-ready DB configuration via `DATABASE_URL` with SQLite fallback for local MVP.
+- Long-term deployment note: Docker Compose is a supported future deployment option.
 
 ### Changed
 - Upload endpoint validates `project_type` and persists project metadata.

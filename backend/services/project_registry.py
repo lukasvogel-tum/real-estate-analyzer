@@ -5,6 +5,11 @@ from typing import Any
 
 import lancedb
 
+from services.metadata_db import (
+    get_project_record,
+    list_project_records,
+    upsert_project_record,
+)
 from services.vectorstore import DB_PATH, REALESTATE_GLOBAL_TABLE, get_table_name
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -205,10 +210,55 @@ def upsert_project(project_name: str, project_type: str | None = None) -> dict[s
     entry["updated_at"] = now_iso
 
     _write_registry(registry)
+
+    try:
+        upsert_project_record(cleaned_name, project_type=entry["project_type"])
+    except Exception:
+        # Registry remains fallback source of truth if metadata DB is unavailable.
+        pass
+
     project = get_project(cleaned_name)
     if project is None:
         raise RuntimeError("Failed to load project after upsert.")
     return project
+
+
+def _merge_metadata_projects(
+    base_projects: list[dict[str, Any]], metadata_projects: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    merged = []
+    by_name = {item["project_name"].lower(): dict(item) for item in base_projects}
+
+    for metadata_item in metadata_projects:
+        key = metadata_item["project_name"].lower()
+        if key in by_name:
+            target = by_name[key]
+            target["project_type"] = metadata_item.get("project_type", target["project_type"])
+            target["created_at"] = metadata_item.get("created_at", target["created_at"])
+            target["updated_at"] = metadata_item.get("updated_at", target["updated_at"])
+            target["files_count"] = max(target["files_count"], metadata_item.get("files_count", 0))
+            target["text_backups_count"] = max(
+                target["text_backups_count"], metadata_item.get("text_backups_count", 0)
+            )
+            target["chunks_indexed"] = max(
+                target["chunks_indexed"], metadata_item.get("chunks_indexed", 0)
+            )
+            by_name[key] = target
+        else:
+            by_name[key] = {
+                "project_name": metadata_item["project_name"],
+                "project_type": metadata_item.get("project_type", DEFAULT_PROJECT_TYPE),
+                "created_at": metadata_item.get("created_at"),
+                "updated_at": metadata_item.get("updated_at"),
+                "files_count": metadata_item.get("files_count", 0),
+                "text_backups_count": metadata_item.get("text_backups_count", 0),
+                "table_name": get_table_name(metadata_item["project_name"]),
+                "has_vector_index": False,
+                "chunks_indexed": metadata_item.get("chunks_indexed", 0),
+            }
+
+    merged.extend(by_name.values())
+    return merged
 
 
 def list_projects() -> list[dict[str, Any]]:
@@ -223,11 +273,28 @@ def list_projects() -> list[dict[str, Any]]:
     for name, entry in registry["projects"].items():
         projects.append(_build_project_info(name, entry, db, table_names))
 
+    try:
+        projects = _merge_metadata_projects(projects, list_project_records())
+    except Exception:
+        pass
+
     return sorted(projects, key=lambda item: item["project_name"].lower())
 
 
 def get_project(project_name: str) -> dict[str, Any] | None:
     cleaned_name = _clean_project_name(project_name)
+
+    try:
+        db_project = get_project_record(cleaned_name)
+        if db_project is not None:
+            projects = list_projects()
+            target = cleaned_name.lower()
+            for project in projects:
+                if project["project_name"].lower() == target:
+                    return project
+    except Exception:
+        pass
+
     projects = list_projects()
     target = cleaned_name.lower()
     for project in projects:
