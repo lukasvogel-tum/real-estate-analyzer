@@ -11,6 +11,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Scope-aware chat (`project`, `realestate_global`, `global`) with shared real estate index support.
 - Endpoint aliases for Postman workflows: `/projects/list` and `/projects/info`.
 - Multi-format ingestion support for `DOCX`, `XLSX`, `PPTX`, `TXT`, `MD`, and `CSV` uploads.
+- Next.js frontend MVP shell with:
+  - Projects page (list + upload)
+  - Project detail page (project-scoped chat)
+  - Workspace page (`realestate_global` + `global` chats)
 
 ### Changed
 - Upload endpoint validates `project_type` and persists project metadata.

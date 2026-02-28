@@ -58,6 +58,7 @@ Phase 3 (Agent-Layer):
 
 ### 1.4 Ziel-Tech-Stack
 - Backend: Python + FastAPI
+- Frontend: Next.js (App Router) + TypeScript
 - RAG: LangChain (LCEL)
 - Vector DB: LanceDB (lokal persistent)
 - Embeddings: OpenAI (`OPENAI_API_KEY` via Windows ENV)
@@ -172,6 +173,14 @@ Stand: 2026-02-28
   - Text zu `Document`-Chunks
 - `backend/utils/embeddings.py`
   - OpenAI Embeddings Initialisierung
+- `frontend/app/*`
+  - UI-Routing fuer Projects, Project Detail und Workspace
+- `frontend/components/UploadForm.tsx`
+  - Upload-Flow fuer projektbezogenes Indexing
+- `frontend/components/ScopeChatPanel.tsx`
+  - Scope-Chat UI fuer `project`, `realestate_global`, `global`
+- `frontend/lib/api.ts`
+  - API-Client fuer FastAPI-Endpoints
 
 ### 2.3 Aktuelle API-Contracts
 
@@ -264,6 +273,7 @@ Stand: 2026-02-28
 Bereits vorhanden:
 - Projektbezogener Upload + persistente Vektorindexierung
 - Projektbezogener Chat mit nachvollziehbarer Evidenz
+- Frontend-MVP fuer Upload, Projektliste, Projekt-Chat und Workspace-Scopes
 
 Noch offen fuer robustes MVP im Einsatz:
 - Einheitliche Error-Struktur auf allen Endpunkten

@@ -151,3 +151,9 @@ projects/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
