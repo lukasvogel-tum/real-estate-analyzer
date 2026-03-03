@@ -31,7 +31,7 @@ Ein professioneller Family-Office-Real-Estate Assistant mit:
 Phase 1 (MVP-RAG, jetzt relevant):
 - Dokumente hochladen, extrahieren, chunken, indexieren (projektbezogen)
 - Scope-basierter Chat mit nachvollziehbarer Antwort:
-  - `scope`: `project` | `realestate_global` | `global` (MVP: `global` nutzt Immobilien-Index)
+  - `scope`: `project` | `realestate_global` | `global` (`global` nutzt `global_brain`)
   - `answer`
   - `sources` (dedupliziert)
   - `evidence` (Auszuege aus echten Retrieval-Treffern)
@@ -80,9 +80,16 @@ Stand: 2026-02-28
 ### 2.1 Implementierte Kernfunktionen
 
 #### Upload-Pipeline (`POST /upload`)
-- Nimmt `files[]` + `project_name` (FormData)
-- Optional: `project_type` (`bestand` | `potenziell`)
-- Speichert Dateien unter `backend/projects/<project>/files/`
+- Nimmt FormData:
+  - `files[]`
+  - `scope_type` (`project` | `domain` | `global`)
+  - `scope_id` (Pflicht fuer `project`/`domain`, optional fuer `global`)
+  - `document_type` (default `general`)
+  - `project_name` (backward-compatible Alias fuer `scope_id` bei `scope_type=project`)
+  - `project_type` (optional, fuer `scope_type=project`)
+- Speichert Dateien:
+  - `project` scope unter `backend/projects/<scope_id>/files/`
+  - `domain/global` scope unter `backend/scopes/<scope_type>/<scope_id>/files/`
 - Extrahiert Text:
   - PDF via `PyPDFLoader`
   - DOCX via `python-docx`
@@ -90,18 +97,25 @@ Stand: 2026-02-28
   - PPTX via `python-pptx`
   - TXT/MD via Plain-Text Read
   - CSV via `csv` parser
-- Speichert Text-Backup unter `backend/projects/<project>/text/`
+- Speichert Text-Backup analog unter `.../text/`
 - Chunkt mit `RecursiveCharacterTextSplitter`:
   - `chunk_size=1000`
   - `chunk_overlap=100`
-- Indexiert Chunks in LanceDB pro Projekt-Tabelle
-- Spiegelt Chunks zusaetzlich in shared Tabelle `realestate_global` (Option B)
+- `project` scope:
+  - Indexiert Chunks in Projekt-Tabelle
+  - Spiegelt zusaetzlich in `realestate_global`
+  - Spiegelt zusaetzlich in `global_brain`
+- `domain/global` scope:
+  - Indexiert Chunks in `global_brain`
 - Schreibt/Aktualisiert Projekt-Metadaten in `backend/projects/_registry.json`
 - Schreibt Upload- und Dateimetadaten in SQL Metadata DB (`projects`, `documents`)
 - Chunk-Metadaten aktuell:
   - `source` (Dateiname)
   - `project_name`
   - `project_type`
+  - `scope_type`
+  - `scope_id`
+  - `document_type`
 
 #### Chat-RAG (`POST /chat`)
 - Request:
@@ -109,10 +123,14 @@ Stand: 2026-02-28
   - `scope` (`project` | `realestate_global` | `global`, default `project`)
   - `project_name` (string, Pflicht wenn `scope=project`)
   - `top_k` (optional, default `4`, valid `1..10`)
+  - Optionale Filter:
+    - `scope_type_filter`
+    - `scope_id_filter`
+    - `document_type_filter`
 - Verhalten:
   - Scope `project`: nutzt projektspezifischen VectorStore
   - Scope `realestate_global`: nutzt shared Tabelle `realestate_global`
-  - Scope `global`: nutzt fuer MVP denselben shared Immobilien-Index
+  - Scope `global`: nutzt primaer shared Tabelle `global_brain`
   - Fallback: falls shared Tabelle noch nicht vorhanden ist, Fanout-Retrieval ueber alle Projekt-Tabellen
   - Bei unbekanntem Projekt oder fehlenden Daten: HTTP `404`
   - Retrieval mit `top_k` (bevorzugt mit Relevance Scores, sonst Fallback ohne Score)
@@ -121,12 +139,16 @@ Stand: 2026-02-28
   - `answer`
   - `scope`
   - `effective_scope`
+  - `filters_applied`
   - `sources` (dedupliziert, stabile Reihenfolge)
   - `evidence[]` mit:
     - `source`
     - `file_name`
     - `project_name`
     - `project_type`
+    - `scope_type`
+    - `scope_id`
+    - `document_type`
     - `excerpt` (max 400 Zeichen)
     - `chunk_id` (falls in Metadaten vorhanden, sonst `null`)
     - `score` (falls verfuegbar, sonst `null`)
@@ -157,6 +179,7 @@ Stand: 2026-02-28
 - `backend/services/vectorstore.py`
   - Projekt-Tabellen in LanceDB
   - Shared Immobilien-Index `realestate_global`
+  - Shared Global-Index `global_brain`
   - Laden/Hinzufuegen von Dokumenten
   - Persistenter DB-Pfad ist explizit auf `backend/lancedb` verankert (kein CWD-Zufall)
   - Schema-Konflikt-Fallback (Drop + Rebuild)
@@ -175,6 +198,7 @@ Stand: 2026-02-28
   - SQLAlchemy Engine + Schema fuer `projects` und `documents`
   - Postgres-kompatibel via `DATABASE_URL` (MVP default: lokale SQLite DB)
   - Upload-Metadaten und Projekt-Metadaten persistieren
+  - Scope-Felder: `scope_type`, `scope_id`, `document_type`
 - `backend/utils/extract_file.py`
   - Dateiextraktion (PDF, DOCX, XLSX, PPTX, TXT, MD, CSV)
 - `backend/utils/text_splitter.py`
@@ -184,7 +208,7 @@ Stand: 2026-02-28
 - `frontend/app/*`
   - UI-Routing fuer Projects, Project Detail und Workspace
 - `frontend/components/UploadForm.tsx`
-  - Upload-Flow fuer projektbezogenes Indexing
+  - Upload-Flow fuer `project/domain/global` inkl. `document_type`
 - `frontend/components/ScopeChatPanel.tsx`
   - Scope-Chat UI fuer `project`, `realestate_global`, `global`
 - `frontend/lib/api.ts`
@@ -194,13 +218,19 @@ Stand: 2026-02-28
 
 #### `POST /upload`
 - Input: FormData
-  - `project_name`: string
-  - `project_type`: optional, `bestand` | `potenziell`
+  - `scope_type`: `project` | `domain` | `global`
+  - `scope_id`: string (Pflicht fuer `project/domain`)
+  - `document_type`: string (optional, default `general`)
+  - `project_name`: optional Alias fuer `scope_id` bei `scope_type=project`
+  - `project_type`: optional, `bestand` | `potenziell` (relevant fuer `project` scope)
   - `files`: 1..n Dateien
 - Erfolgsantwort:
   - `message`
   - `project_name`
   - `project_type`
+  - `scope_type`
+  - `scope_id`
+  - `document_type`
   - `chunks_created`
 - Fehler:
   - `422` bei unsupported Dateityp
@@ -213,6 +243,9 @@ Stand: 2026-02-28
 {
   "scope": "project",
   "project_name": "TestProject",
+  "scope_type_filter": "project",
+  "scope_id_filter": "TestProject",
+  "document_type_filter": "expose",
   "query": "Welche Risiken und Chancen hat das Objekt?",
   "top_k": 4
 }
@@ -223,6 +256,11 @@ Stand: 2026-02-28
   "answer": "...",
   "scope": "project",
   "effective_scope": "project",
+  "filters_applied": {
+    "scope_type": "project",
+    "scope_id": "TestProject",
+    "document_type": "expose"
+  },
   "sources": ["TestProject/file1.pdf", "TestProject/file2.pdf"],
   "evidence": [
     {
@@ -230,6 +268,9 @@ Stand: 2026-02-28
       "file_name": "file1.pdf",
       "project_name": "TestProject",
       "project_type": "potenziell",
+      "scope_type": "project",
+      "scope_id": "TestProject",
+      "document_type": "expose",
       "excerpt": "...",
       "chunk_id": null,
       "score": 0.87

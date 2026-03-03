@@ -38,7 +38,7 @@ export default function ProjectsDashboard() {
       <section className="panel">
         <h2 className="panel-title">Project Upload</h2>
         <p className="panel-subtitle">
-          Upload and index files directly into project and shared portfolio scope.
+          Upload and index files for `project`, `domain`, or `global` scopes.
         </p>
         <div style={{ marginTop: "0.9rem" }}>
           <UploadForm onUploaded={loadProjects} />

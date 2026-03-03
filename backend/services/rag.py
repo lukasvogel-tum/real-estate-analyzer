@@ -31,13 +31,58 @@ def _build_source_label(metadata: dict) -> str:
     return source
 
 
-def retrieve_documents_with_scores(vectorstore, query: str, top_k: int):
+def _normalize_metadata_filters(metadata_filters: dict | None) -> dict[str, str]:
+    if not metadata_filters:
+        return {}
+
+    normalized = {}
+    for key, value in metadata_filters.items():
+        if value is None:
+            continue
+        cleaned = str(value).strip()
+        if cleaned:
+            normalized[key] = cleaned
+    return normalized
+
+
+def _metadata_matches_filters(metadata: dict, metadata_filters: dict[str, str]) -> bool:
+    if not metadata_filters:
+        return True
+
+    for key, expected in metadata_filters.items():
+        actual = metadata.get(key)
+        if actual is None:
+            return False
+        if str(actual).strip().lower() != expected.strip().lower():
+            return False
+    return True
+
+
+def apply_metadata_filters(retrieved_documents, metadata_filters: dict | None):
+    normalized_filters = _normalize_metadata_filters(metadata_filters)
+    if not normalized_filters:
+        return retrieved_documents
+
+    return [
+        (doc, score)
+        for doc, score in retrieved_documents
+        if _metadata_matches_filters(doc.metadata or {}, normalized_filters)
+    ]
+
+
+def retrieve_documents_with_scores(
+    vectorstore, query: str, top_k: int, metadata_filters: dict | None = None
+):
+    fetch_k = max(top_k, top_k * 8)
     try:
-        return vectorstore.similarity_search_with_relevance_scores(query, k=top_k)
+        retrieved = vectorstore.similarity_search_with_relevance_scores(query, k=fetch_k)
     except Exception:
-        retriever = vectorstore.as_retriever(search_kwargs={"k": top_k})
+        retriever = vectorstore.as_retriever(search_kwargs={"k": fetch_k})
         docs = retriever.invoke(query)
-        return [(doc, None) for doc in docs]
+        retrieved = [(doc, None) for doc in docs]
+
+    filtered = apply_metadata_filters(retrieved, metadata_filters)
+    return filtered[:top_k]
 
 
 def _generate_llm_answer(query: str, context: str) -> str:
@@ -98,6 +143,9 @@ def generate_answer_from_documents(query: str, retrieved_documents):
                 "file_name": metadata.get("source", "Unbekannt"),
                 "project_name": metadata.get("project_name"),
                 "project_type": metadata.get("project_type"),
+                "scope_type": metadata.get("scope_type"),
+                "scope_id": metadata.get("scope_id"),
+                "document_type": metadata.get("document_type"),
                 "excerpt": _build_excerpt(doc.page_content),
                 "chunk_id": metadata.get("chunk_id"),
                 "score": _parse_score(score),
@@ -111,7 +159,11 @@ def generate_answer_from_documents(query: str, retrieved_documents):
     }
 
 
-def generate_answer(vectorstore, query: str, top_k: int = 4):
+def generate_answer(
+    vectorstore, query: str, top_k: int = 4, metadata_filters: dict | None = None
+):
     """Erzeugt eine nachvollziehbare Antwort inkl. Sources und Evidence."""
-    retrieved_documents = retrieve_documents_with_scores(vectorstore, query, top_k)
+    retrieved_documents = retrieve_documents_with_scores(
+        vectorstore, query, top_k, metadata_filters=metadata_filters
+    )
     return generate_answer_from_documents(query, retrieved_documents)

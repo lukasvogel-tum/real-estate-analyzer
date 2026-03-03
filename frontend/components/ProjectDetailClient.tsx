@@ -74,10 +74,14 @@ export default function ProjectDetailClient({
         <div style={{ marginTop: "1rem" }}>
           <h3 className="panel-title">Add More Documents</h3>
           <p className="panel-subtitle">
-            New uploads are indexed in this project and in the real estate global scope.
+            New uploads are indexed in this project, real estate global scope, and global brain scope.
           </p>
           <div style={{ marginTop: "0.7rem" }}>
-            <UploadForm defaultProjectName={projectName} onUploaded={loadProject} />
+            <UploadForm
+              defaultProjectName={projectName}
+              lockProjectScope
+              onUploaded={loadProject}
+            />
           </div>
         </div>
       </section>

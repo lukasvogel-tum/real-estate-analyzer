@@ -12,9 +12,9 @@ from services.project_registry import (
     normalize_project_type,
     upsert_project,
 )
-from services.rag import generate_answer, generate_answer_from_documents
+from services.rag import apply_metadata_filters, generate_answer, generate_answer_from_documents
 from services.scope_retriever import resolve_chat_scope
-from services.vectorstore import add_documents_to_project
+from services.vectorstore import add_documents_to_scope
 from utils.extract_file import extract_text_from_file
 from utils.text_splitter import split_text
 
@@ -37,6 +37,51 @@ app.add_middleware(
 )
 
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+VALID_UPLOAD_SCOPE_TYPES = {"project", "domain", "global"}
+
+
+def _normalize_upload_scope_type(scope_type: str | None) -> str:
+    normalized = (scope_type or "project").strip().lower()
+    if normalized not in VALID_UPLOAD_SCOPE_TYPES:
+        valid = ", ".join(sorted(VALID_UPLOAD_SCOPE_TYPES))
+        raise ValueError(f"Invalid scope_type '{scope_type}'. Allowed values: {valid}.")
+    return normalized
+
+
+def _resolve_scope_id(
+    scope_type: str, scope_id: str | None, project_name: str | None
+) -> str:
+    cleaned_scope_id = (scope_id or "").strip()
+    cleaned_project_name = (project_name or "").strip()
+
+    if scope_type == "project":
+        effective_scope_id = cleaned_scope_id or cleaned_project_name
+        if not effective_scope_id:
+            raise ValueError(
+                "scope_id is required for scope_type 'project' (or provide project_name)."
+            )
+        return effective_scope_id
+
+    if scope_type == "global":
+        return cleaned_scope_id or "global"
+
+    if not cleaned_scope_id:
+        raise ValueError("scope_id is required for scope_type 'domain'.")
+    return cleaned_scope_id
+
+
+def _validate_storage_segment(value: str, label: str) -> str:
+    cleaned = (value or "").strip()
+    if not cleaned:
+        raise ValueError(f"{label} is required.")
+    if "/" in cleaned or "\\" in cleaned or cleaned in {".", ".."} or ".." in cleaned:
+        raise ValueError(f"{label} contains invalid path characters.")
+    return cleaned
+
+
+def _normalize_document_type(document_type: str | None) -> str:
+    normalized = (document_type or "general").strip().lower()
+    return normalized or "general"
 
 
 @app.on_event("startup")
@@ -47,25 +92,41 @@ def startup_event() -> None:
 @app.post("/upload")
 async def upload_files(
     files: list[UploadFile] = File(...),
-    project_name: str = Form(...),
+    project_name: str | None = Form(default=None),
     project_type: str | None = Form(default=None),
+    scope_type: str = Form(default="project"),
+    scope_id: str | None = Form(default=None),
+    document_type: str | None = Form(default=None),
 ):
-    if not project_name:
-        raise HTTPException(status_code=422, detail="Project name is required.")
-
     if not files or len(files) == 0:
         raise HTTPException(status_code=422, detail="No files provided.")
 
     try:
+        normalized_scope_type = _normalize_upload_scope_type(scope_type)
+        effective_scope_id = _resolve_scope_id(normalized_scope_type, scope_id, project_name)
+        effective_scope_id = _validate_storage_segment(effective_scope_id, "scope_id")
+        normalized_document_type = _normalize_document_type(document_type)
         normalized_project_type = normalize_project_type(project_type)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
-    project_info = upsert_project(project_name, project_type=normalized_project_type)
-    effective_project_type = project_info["project_type"]
+    if normalized_scope_type == "project":
+        project_info = upsert_project(
+            effective_scope_id, project_type=normalized_project_type
+        )
+        effective_project_name = project_info["project_name"]
+        effective_project_type = project_info["project_type"]
+        project_path = os.path.join(BASE_DIR, "projects", effective_scope_id, "files")
+        text_path = os.path.join(BASE_DIR, "projects", effective_scope_id, "text")
+    else:
+        effective_project_name = f"{normalized_scope_type}:{effective_scope_id}"
+        effective_project_type = normalized_project_type or "potenziell"
+        scope_base_path = os.path.join(
+            BASE_DIR, "scopes", normalized_scope_type, effective_scope_id
+        )
+        project_path = os.path.join(scope_base_path, "files")
+        text_path = os.path.join(scope_base_path, "text")
 
-    project_path = os.path.join(BASE_DIR, "projects", project_name, "files")
-    text_path = os.path.join(BASE_DIR, "projects", project_name, "text")
 
     os.makedirs(project_path, exist_ok=True)
     os.makedirs(text_path, exist_ok=True)
@@ -84,7 +145,7 @@ async def upload_files(
         except Exception as exc:
             try:
                 add_document_record(
-                    project_name=project_name,
+                    project_name=effective_project_name,
                     source_filename=file.filename,
                     stored_file_path=file_path,
                     stored_text_path="",
@@ -93,6 +154,9 @@ async def upload_files(
                     extraction_status="error",
                     error_message=str(exc),
                     project_type=effective_project_type,
+                    scope_type=normalized_scope_type,
+                    scope_id=effective_scope_id,
+                    document_type=normalized_document_type,
                 )
             except Exception:
                 pass
@@ -104,7 +168,7 @@ async def upload_files(
         if not text or not text.strip():
             try:
                 add_document_record(
-                    project_name=project_name,
+                    project_name=effective_project_name,
                     source_filename=file.filename,
                     stored_file_path=file_path,
                     stored_text_path="",
@@ -113,6 +177,9 @@ async def upload_files(
                     extraction_status="error",
                     error_message="Extracted text is empty.",
                     project_type=effective_project_type,
+                    scope_type=normalized_scope_type,
+                    scope_id=effective_scope_id,
+                    document_type=normalized_document_type,
                 )
             except Exception:
                 pass
@@ -125,8 +192,11 @@ async def upload_files(
         metadatas.append(
             {
                 "source": file.filename,
-                "project_name": project_name,
+                "project_name": effective_project_name,
                 "project_type": effective_project_type,
+                "scope_type": normalized_scope_type,
+                "scope_id": effective_scope_id,
+                "document_type": normalized_document_type,
             }
         )
 
@@ -144,10 +214,13 @@ async def upload_files(
         )
 
     documents = split_text(extracted_texts, metadatas=metadatas)
-    add_documents_to_project(
-        project_name=project_name,
+    add_documents_to_scope(
+        scope_type=normalized_scope_type,
+        scope_id=effective_scope_id,
         documents=documents,
+        project_name=effective_project_name,
         project_type=effective_project_type,
+        document_type=normalized_document_type,
     )
 
     chunks_per_source: dict[str, int] = {}
@@ -159,7 +232,7 @@ async def upload_files(
     for record in uploaded_file_records:
         try:
             add_document_record(
-                project_name=project_name,
+                project_name=effective_project_name,
                 source_filename=record["source_filename"],
                 stored_file_path=record["stored_file_path"],
                 stored_text_path=record["stored_text_path"],
@@ -168,6 +241,9 @@ async def upload_files(
                 extraction_status="indexed",
                 error_message=None,
                 project_type=effective_project_type,
+                scope_type=normalized_scope_type,
+                scope_id=effective_scope_id,
+                document_type=normalized_document_type,
             )
         except Exception:
             # Upload flow should continue even if metadata DB is temporarily unavailable.
@@ -175,8 +251,11 @@ async def upload_files(
 
     return {
         "message": "Files uploaded, processed and indexed successfully",
-        "project_name": project_name,
+        "project_name": effective_project_name,
         "project_type": effective_project_type,
+        "scope_type": normalized_scope_type,
+        "scope_id": effective_scope_id,
+        "document_type": normalized_document_type,
         "chunks_created": len(documents),
     }
 
@@ -186,10 +265,19 @@ class ChatRequest(BaseModel):
     scope: str = Field(default="project")
     project_name: str | None = None
     top_k: int = Field(default=4, ge=1, le=10)
+    scope_type_filter: str | None = None
+    scope_id_filter: str | None = None
+    document_type_filter: str | None = None
 
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
+    metadata_filters = {
+        "scope_type": request.scope_type_filter,
+        "scope_id": request.scope_id_filter,
+        "document_type": request.document_type_filter,
+    }
+
     try:
         scope_context = resolve_chat_scope(
             scope=request.scope,
@@ -207,15 +295,23 @@ async def chat(request: ChatRequest):
             vectorstore=scope_context["vectorstore"],
             query=request.query,
             top_k=request.top_k,
+            metadata_filters=metadata_filters,
         )
     else:
+        filtered_docs = apply_metadata_filters(
+            scope_context["retrieved_documents"],
+            metadata_filters=metadata_filters,
+        )
         result = generate_answer_from_documents(
             query=request.query,
-            retrieved_documents=scope_context["retrieved_documents"],
+            retrieved_documents=filtered_docs[: request.top_k],
         )
 
     result["scope"] = scope_context["scope"]
     result["effective_scope"] = scope_context["effective_scope"]
+    result["filters_applied"] = {
+        key: value for key, value in metadata_filters.items() if value is not None and str(value).strip()
+    }
     return result
 
 

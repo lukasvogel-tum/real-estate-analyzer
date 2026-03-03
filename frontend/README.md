@@ -17,3 +17,10 @@ Next.js + TypeScript frontend for the Family Office Brain MVP.
 - `/projects`: upload + project list
 - `/projects/[projectName]`: project details + project-scoped chat
 - `/workspace`: `realestate_global` and `global` chat scopes
+
+## Upload Metadata
+
+The upload form supports structured ingestion metadata:
+- `scope_type`: `project` | `domain` | `global`
+- `scope_id`: identifier inside the scope
+- `document_type`: semantic type like `expose`, `bilanz`, `versicherung`

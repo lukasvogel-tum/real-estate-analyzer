@@ -3,23 +3,30 @@
 import { FormEvent, useMemo, useState } from "react";
 
 import { ApiError, uploadDocuments } from "@/lib/api";
-import type { ProjectType } from "@/lib/types";
+import type { ProjectType, UploadScopeType } from "@/lib/types";
 
 type UploadFormProps = {
   defaultProjectName?: string;
+  lockProjectScope?: boolean;
   onUploaded?: () => void;
 };
 
 export default function UploadForm({
   defaultProjectName = "",
+  lockProjectScope = false,
   onUploaded,
 }: UploadFormProps) {
-  const [projectName, setProjectName] = useState(defaultProjectName);
+  const [scopeType, setScopeType] = useState<UploadScopeType>("project");
+  const [scopeId, setScopeId] = useState(defaultProjectName);
+  const [documentType, setDocumentType] = useState("general");
   const [projectType, setProjectType] = useState<ProjectType>("potenziell");
   const [files, setFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const isLockedProject = lockProjectScope && defaultProjectName.trim().length > 0;
+
+  const effectiveScopeType: UploadScopeType = isLockedProject ? "project" : scopeType;
 
   const fileSummary = useMemo(() => {
     if (files.length === 0) {
@@ -36,8 +43,8 @@ export default function UploadForm({
     setStatus("");
     setError("");
 
-    if (!projectName.trim()) {
-      setError("Project name is required.");
+    if (!scopeId.trim()) {
+      setError("Scope ID is required.");
       return;
     }
     if (files.length === 0) {
@@ -47,13 +54,17 @@ export default function UploadForm({
 
     setIsSubmitting(true);
     try {
+      const normalizedScopeId = scopeId.trim();
       const response = await uploadDocuments({
-        projectName: projectName.trim(),
-        projectType,
+        scopeType: effectiveScopeType,
+        scopeId: normalizedScopeId,
+        documentType: documentType.trim() || "general",
+        projectName: effectiveScopeType === "project" ? normalizedScopeId : undefined,
+        projectType: effectiveScopeType === "project" ? projectType : undefined,
         files,
       });
       setStatus(
-        `Upload complete: ${response.chunks_created} chunks indexed for ${response.project_name}.`,
+        `Upload complete: ${response.chunks_created} chunks indexed for ${response.scope_type}:${response.scope_id}.`,
       );
       setFiles([]);
       onUploaded?.();
@@ -73,26 +84,59 @@ export default function UploadForm({
   return (
     <form onSubmit={handleSubmit} className="field-group">
       <div className="field">
-        <label htmlFor="projectName">Project Name</label>
+        <label htmlFor="scopeType">Scope Type</label>
+        <select
+          id="scopeType"
+          value={effectiveScopeType}
+          disabled={isLockedProject}
+          onChange={(event) => setScopeType(event.target.value as UploadScopeType)}
+        >
+          <option value="project">project</option>
+          <option value="domain">domain</option>
+          <option value="global">global</option>
+        </select>
+      </div>
+
+      <div className="field">
+        <label htmlFor="scopeId">Scope ID</label>
         <input
-          id="projectName"
-          value={projectName}
-          onChange={(event) => setProjectName(event.target.value)}
-          placeholder="e.g. Berlin-Mitte Deal"
+          id="scopeId"
+          value={scopeId}
+          onChange={(event) => setScopeId(event.target.value)}
+          placeholder={
+            effectiveScopeType === "project"
+              ? "e.g. Berlin-Mitte-Deal"
+              : effectiveScopeType === "domain"
+                ? "e.g. corporate, insurance, tax"
+                : "global"
+          }
+          disabled={isLockedProject}
         />
       </div>
 
       <div className="field">
-        <label htmlFor="projectType">Project Type</label>
-        <select
-          id="projectType"
-          value={projectType}
-          onChange={(event) => setProjectType(event.target.value as ProjectType)}
-        >
-          <option value="potenziell">potenziell</option>
-          <option value="bestand">bestand</option>
-        </select>
+        <label htmlFor="documentType">Document Type</label>
+        <input
+          id="documentType"
+          value={documentType}
+          onChange={(event) => setDocumentType(event.target.value)}
+          placeholder="e.g. expose, bilanz, versicherung, gesellschaftsstruktur"
+        />
       </div>
+
+      {effectiveScopeType === "project" && (
+        <div className="field">
+          <label htmlFor="projectType">Project Type</label>
+          <select
+            id="projectType"
+            value={projectType}
+            onChange={(event) => setProjectType(event.target.value as ProjectType)}
+          >
+            <option value="potenziell">potenziell</option>
+            <option value="bestand">bestand</option>
+          </select>
+        </div>
+      )}
 
       <div className="field">
         <label htmlFor="files">Documents</label>
