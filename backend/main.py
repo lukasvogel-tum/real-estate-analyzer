@@ -1,10 +1,18 @@
 import os
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+load_dotenv()
+
+from services.graph_db import close_graph_driver, init_graph
+from services.graph_ingest import ingest_upload_to_graph
+from services.graph_queries import get_graph_context_for_chat
 from services.metadata_db import add_document_record, init_metadata_db
 from services.project_registry import (
     get_project,
@@ -14,14 +22,12 @@ from services.project_registry import (
 )
 from services.rag import apply_metadata_filters, generate_answer, generate_answer_from_documents
 from services.scope_retriever import resolve_chat_scope
+from services.system_status import get_knowledge_status
 from services.vectorstore import add_documents_to_scope
 from utils.extract_file import extract_text_from_file
 from utils.text_splitter import split_text
 
-load_dotenv()
-
 app = FastAPI()
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CORS_ALLOW_ORIGINS = os.getenv(
     "CORS_ALLOW_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000",
@@ -87,6 +93,12 @@ def _normalize_document_type(document_type: str | None) -> str:
 @app.on_event("startup")
 def startup_event() -> None:
     init_metadata_db()
+    init_graph()
+
+
+@app.on_event("shutdown")
+def shutdown_event() -> None:
+    close_graph_driver()
 
 
 @app.post("/upload")
@@ -120,13 +132,12 @@ async def upload_files(
         text_path = os.path.join(BASE_DIR, "projects", effective_scope_id, "text")
     else:
         effective_project_name = f"{normalized_scope_type}:{effective_scope_id}"
-        effective_project_type = normalized_project_type or "potenziell"
+        effective_project_type = normalized_project_type or "geplant"
         scope_base_path = os.path.join(
             BASE_DIR, "scopes", normalized_scope_type, effective_scope_id
         )
         project_path = os.path.join(scope_base_path, "files")
         text_path = os.path.join(scope_base_path, "text")
-
 
     os.makedirs(project_path, exist_ok=True)
     os.makedirs(text_path, exist_ok=True)
@@ -223,6 +234,26 @@ async def upload_files(
         document_type=normalized_document_type,
     )
 
+    graph_status = "not_indexed"
+    graph_error_message = None
+    graph_last_indexed_at = None
+    try:
+        graph_result = ingest_upload_to_graph(
+            project_name=effective_project_name,
+            project_type=effective_project_type,
+            scope_type=normalized_scope_type,
+            scope_id=effective_scope_id,
+            document_type=normalized_document_type,
+            uploaded_file_records=uploaded_file_records,
+            documents=documents,
+        )
+        graph_status = str(graph_result.get("status", "not_indexed"))
+        if graph_status == "indexed":
+            graph_last_indexed_at = datetime.now(timezone.utc).replace(microsecond=0)
+    except Exception as exc:
+        graph_status = "error"
+        graph_error_message = str(exc)
+
     chunks_per_source: dict[str, int] = {}
     for doc in documents:
         source = (doc.metadata or {}).get("source")
@@ -240,6 +271,9 @@ async def upload_files(
                 chunks_indexed=chunks_per_source.get(record["source_filename"], 0),
                 extraction_status="indexed",
                 error_message=None,
+                graph_status=graph_status,
+                graph_last_indexed_at=graph_last_indexed_at,
+                graph_error_message=graph_error_message,
                 project_type=effective_project_type,
                 scope_type=normalized_scope_type,
                 scope_id=effective_scope_id,
@@ -290,12 +324,20 @@ async def chat(request: ChatRequest):
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
+    graph_result = get_graph_context_for_chat(
+        query=request.query,
+        scope=scope_context["scope"],
+        project_name=request.project_name,
+    )
+
     if scope_context["mode"] == "vectorstore":
         result = generate_answer(
             vectorstore=scope_context["vectorstore"],
             query=request.query,
             top_k=request.top_k,
             metadata_filters=metadata_filters,
+            graph_context=graph_result["graph_context"],
+            graph_facts=graph_result["graph_facts"],
         )
     else:
         filtered_docs = apply_metadata_filters(
@@ -305,6 +347,8 @@ async def chat(request: ChatRequest):
         result = generate_answer_from_documents(
             query=request.query,
             retrieved_documents=filtered_docs[: request.top_k],
+            graph_context=graph_result["graph_context"],
+            graph_facts=graph_result["graph_facts"],
         )
 
     result["scope"] = scope_context["scope"]
@@ -319,6 +363,11 @@ async def chat(request: ChatRequest):
 async def get_projects():
     projects = list_projects()
     return {"projects": projects, "count": len(projects)}
+
+
+@app.get("/system/knowledge-status")
+async def get_system_knowledge_status():
+    return get_knowledge_status()
 
 
 @app.get("/projects/list")

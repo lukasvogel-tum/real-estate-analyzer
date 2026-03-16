@@ -11,6 +11,7 @@ DEFAULT_DATABASE_URL = f"sqlite:///{DEFAULT_SQLITE_PATH}"
 DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
 VALID_SCOPE_TYPES = {"project", "domain", "global"}
 DEFAULT_DOCUMENT_TYPE = "general"
+DEFAULT_PROJECT_TYPE = "geplant"
 
 
 def _normalize_database_url(database_url: str) -> str:
@@ -45,7 +46,7 @@ class ProjectRecord(Base):
     project_name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     scope_type: Mapped[str] = mapped_column(String(32), default="project")
     scope_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    project_type: Mapped[str] = mapped_column(String(64), default="potenziell")
+    project_type: Mapped[str] = mapped_column(String(64), default=DEFAULT_PROJECT_TYPE)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -70,6 +71,11 @@ class DocumentRecord(Base):
     chunks_indexed: Mapped[int] = mapped_column(Integer, default=0)
     extraction_status: Mapped[str] = mapped_column(String(64), default="indexed")
     error_message: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    graph_status: Mapped[str] = mapped_column(String(64), default="not_indexed")
+    graph_last_indexed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    graph_error_message: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -97,7 +103,7 @@ def _as_project_summary(row: Any) -> dict[str, Any]:
         "project_name": project.project_name,
         "scope_type": project.scope_type,
         "scope_id": project.scope_id,
-        "project_type": project.project_type,
+        "project_type": _normalize_project_type(project.project_type),
         "created_at": _to_iso(project.created_at),
         "updated_at": _to_iso(project.updated_at),
         "files_count": files_count,
@@ -131,6 +137,15 @@ def _normalize_document_type(document_type: str | None) -> str:
     return normalized or DEFAULT_DOCUMENT_TYPE
 
 
+def _normalize_project_type(project_type: str | None) -> str:
+    normalized = (project_type or DEFAULT_PROJECT_TYPE).strip().lower()
+    if normalized == "potenziell":
+        return "geplant"
+    if normalized not in {"bestand", "geplant"}:
+        return DEFAULT_PROJECT_TYPE
+    return normalized
+
+
 def _ensure_schema_columns() -> None:
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())
@@ -154,6 +169,14 @@ def _ensure_schema_columns() -> None:
         statements.append(
             f"ALTER TABLE documents ADD COLUMN document_type VARCHAR(128) DEFAULT '{DEFAULT_DOCUMENT_TYPE}'"
         )
+    if "graph_status" not in document_columns:
+        statements.append(
+            "ALTER TABLE documents ADD COLUMN graph_status VARCHAR(64) DEFAULT 'not_indexed'"
+        )
+    if "graph_last_indexed_at" not in document_columns:
+        statements.append("ALTER TABLE documents ADD COLUMN graph_last_indexed_at DATETIME")
+    if "graph_error_message" not in document_columns:
+        statements.append("ALTER TABLE documents ADD COLUMN graph_error_message VARCHAR(2048)")
 
     if not statements:
         return
@@ -193,7 +216,7 @@ def _get_or_create_project(
             project_name=cleaned_name,
             scope_type=normalized_scope_type,
             scope_id=normalized_scope_id,
-            project_type=(project_type or "potenziell"),
+            project_type=_normalize_project_type(project_type),
             created_at=now,
             updated_at=now,
         )
@@ -202,7 +225,9 @@ def _get_or_create_project(
         return project
 
     if project_type:
-        project.project_type = project_type
+        project.project_type = _normalize_project_type(project_type)
+    elif project.project_type:
+        project.project_type = _normalize_project_type(project.project_type)
     project.scope_type = normalized_scope_type
     project.scope_id = normalized_scope_id
     project.updated_at = now
@@ -245,6 +270,9 @@ def add_document_record(
     chunks_indexed: int = 0,
     extraction_status: str = "indexed",
     error_message: str | None = None,
+    graph_status: str = "not_indexed",
+    graph_last_indexed_at: datetime | None = None,
+    graph_error_message: str | None = None,
     project_type: str | None = None,
     scope_type: str = "project",
     scope_id: str | None = None,
@@ -252,6 +280,7 @@ def add_document_record(
 ) -> None:
     normalized_scope_type = _normalize_scope_type(scope_type)
     normalized_document_type = _normalize_document_type(document_type)
+    _ensure_schema_columns()
     with SessionLocal() as session:
         project = _get_or_create_project(
             session,
@@ -277,6 +306,9 @@ def add_document_record(
                 chunks_indexed=max(0, int(chunks_indexed or 0)),
                 extraction_status=extraction_status,
                 error_message=error_message,
+                graph_status=graph_status,
+                graph_last_indexed_at=graph_last_indexed_at,
+                graph_error_message=graph_error_message,
                 created_at=now,
                 updated_at=now,
             )
@@ -284,7 +316,58 @@ def add_document_record(
         session.commit()
 
 
+def update_document_graph_status(
+    stored_file_path: str,
+    graph_status: str,
+    graph_error_message: str | None = None,
+    graph_last_indexed_at: datetime | None = None,
+) -> None:
+    target_path = (stored_file_path or "").strip()
+    if not target_path:
+        raise ValueError("stored_file_path is required.")
+
+    _ensure_schema_columns()
+    with SessionLocal() as session:
+        statement = (
+            select(DocumentRecord)
+            .where(DocumentRecord.stored_file_path == target_path)
+            .order_by(DocumentRecord.id.desc())
+        )
+        document = session.execute(statement).scalars().first()
+        if document is None:
+            return
+
+        document.graph_status = (graph_status or "not_indexed").strip().lower() or "not_indexed"
+        document.graph_error_message = graph_error_message
+        document.graph_last_indexed_at = graph_last_indexed_at
+        document.updated_at = _utc_now()
+        session.add(document)
+        session.commit()
+
+
+def get_metadata_overview() -> dict[str, int]:
+    _ensure_schema_columns()
+    with SessionLocal() as session:
+        project_count = int(session.scalar(select(func.count(ProjectRecord.id))) or 0)
+        document_count = int(session.scalar(select(func.count(DocumentRecord.id))) or 0)
+        graph_indexed_documents = int(
+            session.scalar(
+                select(func.count(DocumentRecord.id)).where(
+                    DocumentRecord.graph_status == "indexed"
+                )
+            )
+            or 0
+        )
+
+    return {
+        "project_count": project_count,
+        "document_count": document_count,
+        "graph_indexed_documents": graph_indexed_documents,
+    }
+
+
 def list_project_records() -> list[dict[str, Any]]:
+    _ensure_schema_columns()
     with SessionLocal() as session:
         statement = (
             select(
@@ -305,6 +388,7 @@ def get_project_record(project_name: str) -> dict[str, Any] | None:
     if not target:
         return None
 
+    _ensure_schema_columns()
     with SessionLocal() as session:
         statement = (
             select(

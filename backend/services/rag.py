@@ -31,6 +31,24 @@ def _build_source_label(metadata: dict) -> str:
     return source
 
 
+def _normalize_graph_facts(graph_facts: list[dict] | None) -> list[dict]:
+    normalized = []
+    for item in graph_facts or []:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text", "")).strip()
+        if not text:
+            continue
+        normalized.append(
+            {
+                "kind": str(item.get("kind", "fact")).strip() or "fact",
+                "label": str(item.get("label", "")).strip() or None,
+                "text": text,
+            }
+        )
+    return normalized
+
+
 def _normalize_metadata_filters(metadata_filters: dict | None) -> dict[str, str]:
     if not metadata_filters:
         return {}
@@ -90,7 +108,7 @@ def _generate_llm_answer(query: str, context: str) -> str:
 
     system_prompt = (
         "Du bist ein erfahrener Immobilien-Experte. "
-        "Nutze den folgenden Kontext, um die Frage des Benutzers zu beantworten. "
+        "Nutze den folgenden Kontext aus Dokumenten und optionalen Graph-Fakten, um die Frage des Benutzers zu beantworten. "
         "Wenn die Antwort nicht im Kontext steht, sag das klar. "
         "\n\n"
         "{context}"
@@ -113,16 +131,32 @@ def _generate_llm_answer(query: str, context: str) -> str:
     return rag_chain.invoke(query)
 
 
-def generate_answer_from_documents(query: str, retrieved_documents):
+def generate_answer_from_documents(
+    query: str,
+    retrieved_documents,
+    graph_context: str | None = None,
+    graph_facts: list[dict] | None = None,
+):
     """Erzeugt eine Antwort basierend auf bereits abgerufenen Treffern."""
-    if not retrieved_documents:
+    normalized_graph_facts = _normalize_graph_facts(graph_facts)
+
+    if not retrieved_documents and not (graph_context or normalized_graph_facts):
         return {
             "answer": "Ich konnte keine relevanten Informationen in den Dokumenten finden.",
             "sources": [],
             "evidence": [],
+            "graph_facts": [],
         }
 
-    context = "\n\n".join(doc.page_content for doc, _score in retrieved_documents)
+    context_sections = []
+    if retrieved_documents:
+        context_sections.append(
+            "Dokumentkontext:\n" + "\n\n".join(doc.page_content for doc, _score in retrieved_documents)
+        )
+    if graph_context:
+        context_sections.append("Graph-Fakten:\n" + graph_context)
+
+    context = "\n\n".join(context_sections)
     answer = _generate_llm_answer(query, context)
 
     sources = []
@@ -156,14 +190,25 @@ def generate_answer_from_documents(query: str, retrieved_documents):
         "answer": answer,
         "sources": sources,
         "evidence": evidence,
+        "graph_facts": normalized_graph_facts,
     }
 
 
 def generate_answer(
-    vectorstore, query: str, top_k: int = 4, metadata_filters: dict | None = None
+    vectorstore,
+    query: str,
+    top_k: int = 4,
+    metadata_filters: dict | None = None,
+    graph_context: str | None = None,
+    graph_facts: list[dict] | None = None,
 ):
     """Erzeugt eine nachvollziehbare Antwort inkl. Sources und Evidence."""
     retrieved_documents = retrieve_documents_with_scores(
         vectorstore, query, top_k, metadata_filters=metadata_filters
     )
-    return generate_answer_from_documents(query, retrieved_documents)
+    return generate_answer_from_documents(
+        query,
+        retrieved_documents,
+        graph_context=graph_context,
+        graph_facts=graph_facts,
+    )

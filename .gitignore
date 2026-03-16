@@ -160,3 +160,7 @@ frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/.turbo/
+
+# Keep frontend source lib folder tracked (overrides generic Python lib/ rule).
+!frontend/lib/
+!frontend/lib/**

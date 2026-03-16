@@ -16,3 +16,4 @@ openpyxl
 python-pptx
 sqlalchemy
 psycopg[binary]
+neo4j

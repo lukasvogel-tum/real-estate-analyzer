@@ -15,8 +15,8 @@ from services.vectorstore import DB_PATH, GLOBAL_BRAIN_TABLE, REALESTATE_GLOBAL_
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECTS_DIR = os.path.join(BACKEND_DIR, "projects")
 REGISTRY_PATH = os.path.join(PROJECTS_DIR, "_registry.json")
-DEFAULT_PROJECT_TYPE = "potenziell"
-VALID_PROJECT_TYPES = {"bestand", "potenziell"}
+DEFAULT_PROJECT_TYPE = "geplant"
+VALID_PROJECT_TYPES = {"bestand", "geplant", "potenziell"}
 
 
 def _utc_now_iso() -> str:
@@ -36,8 +36,12 @@ def normalize_project_type(project_type: str | None) -> str | None:
 
     normalized = project_type.strip().lower()
     if normalized not in VALID_PROJECT_TYPES:
-        valid = ", ".join(sorted(VALID_PROJECT_TYPES))
-        raise ValueError(f"Invalid project_type '{project_type}'. Allowed values: {valid}.")
+        raise ValueError(
+            f"Invalid project_type '{project_type}'. Allowed values: bestand, geplant."
+        )
+
+    if normalized == "potenziell":
+        return "geplant"
 
     return normalized
 
