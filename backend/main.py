@@ -20,7 +20,11 @@ from services.project_registry import (
     normalize_project_type,
     upsert_project,
 )
-from services.rag import apply_metadata_filters, generate_answer, generate_answer_from_documents
+from services.rag import (
+    apply_metadata_filters,
+    generate_answer,
+    generate_answer_from_documents,
+)
 from services.scope_retriever import resolve_chat_scope
 from services.system_status import get_knowledge_status
 from services.vectorstore import add_documents_to_scope
@@ -32,7 +36,9 @@ CORS_ALLOW_ORIGINS = os.getenv(
     "CORS_ALLOW_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000",
 )
-ALLOW_ORIGINS = [origin.strip() for origin in CORS_ALLOW_ORIGINS.split(",") if origin.strip()]
+ALLOW_ORIGINS = [
+    origin.strip() for origin in CORS_ALLOW_ORIGINS.split(",") if origin.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,7 +48,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+_openai_key = os.getenv("OPENAI_API_KEY")
+if _openai_key:
+    os.environ["OPENAI_API_KEY"] = _openai_key
 VALID_UPLOAD_SCOPE_TYPES = {"project", "domain", "global"}
 
 
@@ -115,7 +123,9 @@ async def upload_files(
 
     try:
         normalized_scope_type = _normalize_upload_scope_type(scope_type)
-        effective_scope_id = _resolve_scope_id(normalized_scope_type, scope_id, project_name)
+        effective_scope_id = _resolve_scope_id(
+            normalized_scope_type, scope_id, project_name
+        )
         effective_scope_id = _validate_storage_segment(effective_scope_id, "scope_id")
         normalized_document_type = _normalize_document_type(document_type)
         normalized_project_type = normalize_project_type(project_type)
@@ -160,7 +170,9 @@ async def upload_files(
                     source_filename=file.filename,
                     stored_file_path=file_path,
                     stored_text_path="",
-                    file_size_bytes=os.path.getsize(file_path) if os.path.exists(file_path) else None,
+                    file_size_bytes=os.path.getsize(file_path)
+                    if os.path.exists(file_path)
+                    else None,
                     chunks_indexed=0,
                     extraction_status="error",
                     error_message=str(exc),
@@ -183,7 +195,9 @@ async def upload_files(
                     source_filename=file.filename,
                     stored_file_path=file_path,
                     stored_text_path="",
-                    file_size_bytes=os.path.getsize(file_path) if os.path.exists(file_path) else None,
+                    file_size_bytes=os.path.getsize(file_path)
+                    if os.path.exists(file_path)
+                    else None,
                     chunks_indexed=0,
                     extraction_status="error",
                     error_message="Extracted text is empty.",
@@ -220,7 +234,9 @@ async def upload_files(
                 "source_filename": file.filename,
                 "stored_file_path": file_path,
                 "stored_text_path": text_file_path,
-                "file_size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else None,
+                "file_size_bytes": os.path.getsize(file_path)
+                if os.path.exists(file_path)
+                else None,
             }
         )
 
@@ -354,7 +370,9 @@ async def chat(request: ChatRequest):
     result["scope"] = scope_context["scope"]
     result["effective_scope"] = scope_context["effective_scope"]
     result["filters_applied"] = {
-        key: value for key, value in metadata_filters.items() if value is not None and str(value).strip()
+        key: value
+        for key, value in metadata_filters.items()
+        if value is not None and str(value).strip()
     }
     return result
 
@@ -387,6 +405,8 @@ async def get_project_info(project_name: str):
 
     project = get_project(project_name)
     if project is None:
-        raise HTTPException(status_code=404, detail=f"Project '{project_name}' not found.")
+        raise HTTPException(
+            status_code=404, detail=f"Project '{project_name}' not found."
+        )
 
     return project
