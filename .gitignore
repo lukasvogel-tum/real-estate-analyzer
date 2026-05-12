@@ -154,6 +154,8 @@ projects/
 .idea/
 .DS_Store
 Thumbs.db
+/nul
+/__init__.py
 
 # Node / Next.js
 frontend/node_modules/
