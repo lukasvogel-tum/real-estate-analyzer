@@ -36,14 +36,17 @@ Phase 1 (MVP-RAG, jetzt relevant):
   - `sources` (dedupliziert)
   - `evidence` (Auszuege aus echten Retrieval-Treffern)
 
-Phase 2 (naechster Ausbau):
+Phase 2 (Foundation implementiert, Ausbau laeuft):
 - Projekt-Registry:
   - `project_type` (`bestand` | `geplant`)
   - Endpoints fuer Liste und Projekt-Infos
-  - Persistente Projekt-Metadaten (JSON-Registry)
+  - Persistente Projekt-Metadaten (JSON-Registry + SQL Metadata DB)
 
-Phase 3 (Agent-Layer):
-- Evaluation Agent:
+Phase 3 (Graph-/Agent-Layer):
+- Graph-Foundation:
+  - optionale Neo4j-Wissensstruktur fuer Scopes, Projekte, Dokumente, Chunks, Entities und Relationships
+  - Chat-Augmentation ueber query-relevante Graph-Fakten
+- Evaluation Agent (naechster Produkt-Ausbau):
   - Bewertung von Lage, Zustand, Risiken, Kennzahlen
   - Offene Fragen und Due-Diligence-Checklisten
 
@@ -54,7 +57,9 @@ Phase 3 (Agent-Layer):
 - Datenhaltung:
   - `backend/projects/<project>/files` fuer Originaldateien
   - `backend/projects/<project>/text` fuer Text-Backups
+  - `backend/scopes/` fuer nicht-projektbezogene Scope-Dateien
   - `backend/lancedb/` fuer persistente Vektordaten
+  - `backend/metadata.db` als lokaler SQL-Metadatenstore
 
 ### 1.4 Ziel-Tech-Stack
 - Backend: Python + FastAPI
@@ -77,7 +82,13 @@ Phase 3 (Agent-Layer):
 
 ## 2) Ist-Stand (Heute)
 
-Stand: 2026-03-03
+Stand: 2026-05-28
+
+### 2.0 GitHub-/Arbeitsstand
+- Letzter fachlicher Merge: PR `#5` wurde am 2026-05-28 nach `main` gemerged.
+- `main` enthaelt damit Metadata DB, Graph-/Brain-Foundation, scoped ingestion, lokale Workflow-Helfer und den startup-toleranten OpenAI-Key-Fix.
+- Dieser Doku-Nachtrag erfasst den Stand nach PR `#5` in `PROJECT_STATUS.md` und `CHANGELOG.md`.
+- Entwicklung bleibt branch-first; neue fachliche Aenderungen sollten von aktuellem `main` abzweigen.
 
 ### 2.1 Implementierte Kernfunktionen
 
@@ -101,6 +112,7 @@ Stand: 2026-03-03
   - Success-Banner nach Upload/Refresh
 - Seitenstruktur:
   - `/brain`: globaler Brain-Chat als zentraler Startscreen
+    - inklusive Knowledge-Layer-Status fuer Metadata DB, Vector-Indizes und Graph
   - `/projects`: Upload + Workspace-Kacheln fuer `Bestand` und `Geplant`
   - `/projects/[projectName]`: Projekt-KPIs + Upload + fokussierter Projekt-Chat
   - `/workspace`: Legacy-Redirect auf `/brain`
@@ -137,6 +149,9 @@ Stand: 2026-03-03
   - query-relevante Entities
   - query-relevante Beziehungen
   - aktuell zusaetzlich zum bestehenden Dokument-RAG, nicht statt dessen
+- Die OpenAI-Konfiguration ist startup-tolerant:
+  - fehlender `OPENAI_API_KEY` wird nicht mehr als leerer ENV-Wert in `os.environ` geschrieben
+  - OpenAI-abhaengige Funktionen benoetigen weiterhin einen gueltigen Key zur Laufzeit
 
 #### Upload-Pipeline (`POST /upload`)
 - Nimmt FormData:
@@ -283,6 +298,8 @@ Stand: 2026-03-03
   - Aggregiert Metadata-, Vector- und Graph-Status fuer das Frontend
 - `backend/services/analysis_schema.py`
   - Strukturierte Analyse-Result-Modelle als Grundlage fuer spaetere Excel-/Template-Adapter
+- `Makefile`
+  - Lokale Helfer fuer Backend-/Frontend-Start, Dependency-Installation, Graph-Start/-Stop und Quality Checks
 - `docs/LOCAL_NEO4J.md`
   - lokales Setup fuer Neo4j via Docker Compose
 - `scripts/start_local_graph.ps1`
@@ -455,11 +472,14 @@ Bereits vorhanden:
 - Frontend-MVP mit `Brain` + `Projects`, App Shell, Design System und konsistenten UX-States
 - Metadata-DB-Layer fuer Projekte und Upload-Dokumente (SQLAlchemy)
 - Neo4j-Foundation fuer spaetere Graph-Augmentation im Global Brain
+- Root-Workflow-Helfer via `Makefile`
 
 Noch offen fuer robustes MVP im Einsatz:
 - Einheitliche Error-Struktur auf allen Endpunkten
 - Minimales Logging/Observability
-- Graph-Entity-/Relationship-Extraktion ueber Dokument-/Chunk-Struktur hinaus
+- Produktreife Graph-Entity-/Relationship-Extraktion mit Qualitaetskontrolle, Evaluation und besserer Debuggability
+- Automatisierte Testbasis und CI
+- Browser-QA-Automation (Playwright oder Browser-MCP/DevTools-Bridge)
 
 ---
 
@@ -473,6 +493,8 @@ Noch offen fuer robustes MVP im Einsatz:
 ### 3.1 Laufzeit-Config (wichtig)
 - `CORS_ALLOW_ORIGINS` kann genutzt werden, um erlaubte Frontend-Origin(s) zu steuern.
 - Default fuer lokale Entwicklung: `http://localhost:3000,http://127.0.0.1:3000`
+- Graph-Features werden ueber `GRAPH_ENABLED` und `NEO4J_*` gesteuert und muessen optional bleiben.
+- `OPENAI_API_KEY` ist fuer Embeddings, Chat-Antworten und optionale Graph-Extraction erforderlich, aber fehlende Keys duerfen die App nicht komplett brechen.
 
 ---
 
