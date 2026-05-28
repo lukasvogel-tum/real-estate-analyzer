@@ -6,10 +6,55 @@ from langchain_community.document_loaders import PyPDFLoader
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".md", ".csv"}
 
 
+def _extract_pdf_with_pypdf(file_path: str) -> str:
+    try:
+        from pypdf import PdfReader
+    except ImportError as exc:
+        raise ValueError("Missing dependency for PDF extraction. Install `pypdf`.") from exc
+
+    try:
+        reader = PdfReader(file_path)
+    except Exception as exc:
+        raise ValueError(f"Could not read PDF file: {exc}") from exc
+
+    if getattr(reader, "is_encrypted", False):
+        try:
+            reader.decrypt("")
+        except Exception as exc:
+            raise ValueError(
+                "PDF is encrypted and cannot be processed without a password."
+            ) from exc
+
+    chunks = []
+    for page in reader.pages:
+        try:
+            extracted = page.extract_text() or ""
+        except Exception:
+            extracted = ""
+        if extracted.strip():
+            chunks.append(extracted.strip())
+
+    return "\n".join(chunks)
+
+
 def _extract_pdf(file_path: str) -> str:
-    loader = PyPDFLoader(file_path)
-    pages = loader.load_and_split()
-    return " ".join(page.page_content for page in pages)
+    loader_error = None
+    try:
+        loader = PyPDFLoader(file_path)
+        pages = loader.load_and_split()
+        text = " ".join(page.page_content for page in pages).strip()
+        if text:
+            return text
+    except Exception as exc:
+        loader_error = exc
+
+    fallback_text = _extract_pdf_with_pypdf(file_path).strip()
+    if fallback_text:
+        return fallback_text
+
+    if loader_error is not None:
+        raise ValueError(f"Could not extract text from PDF. Parser error: {loader_error}")
+    raise ValueError("Could not extract text from PDF.")
 
 
 def _extract_docx(file_path: str) -> str:

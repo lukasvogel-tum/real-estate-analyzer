@@ -1,7 +1,11 @@
 from typing import Any
 
 from services.project_registry import list_projects
-from services.vectorstore import get_realestate_global_vectorstore, get_vectorstore
+from services.vectorstore import (
+    get_global_brain_vectorstore,
+    get_realestate_global_vectorstore,
+    get_vectorstore,
+)
 
 VALID_SCOPES = {"project", "realestate_global", "global"}
 
@@ -66,24 +70,54 @@ def resolve_chat_scope(scope: str | None, project_name: str | None, query: str, 
             "vectorstore": project_vectorstore,
         }
 
-    # MVP: 'global' uses the same shared real-estate index for now.
-    shared_vectorstore = get_realestate_global_vectorstore()
-    if shared_vectorstore is not None:
+    if normalized_scope == "realestate_global":
+        shared_vectorstore = get_realestate_global_vectorstore()
+        if shared_vectorstore is not None:
+            return {
+                "mode": "vectorstore",
+                "scope": normalized_scope,
+                "effective_scope": normalized_scope,
+                "vectorstore": shared_vectorstore,
+            }
+
+        fallback_hits = _fanout_realestate_search(query, top_k)
+        if not fallback_hits:
+            raise LookupError("No indexed real estate documents found for the requested scope.")
+
+        return {
+            "mode": "documents",
+            "scope": normalized_scope,
+            "effective_scope": "realestate_global_fallback",
+            "retrieved_documents": fallback_hits,
+        }
+
+    # Scope `global`: prefer the dedicated global brain table.
+    global_vectorstore = get_global_brain_vectorstore()
+    if global_vectorstore is not None:
         return {
             "mode": "vectorstore",
             "scope": normalized_scope,
             "effective_scope": normalized_scope,
-            "vectorstore": shared_vectorstore,
+            "vectorstore": global_vectorstore,
         }
 
-    # Fallback so existing project-only indexes remain queryable before re-upload.
+    # Compatibility fallback for environments without `global_brain` table yet.
+    shared_realestate = get_realestate_global_vectorstore()
+    if shared_realestate is not None:
+        return {
+            "mode": "vectorstore",
+            "scope": normalized_scope,
+            "effective_scope": "global_fallback_realestate",
+            "vectorstore": shared_realestate,
+        }
+
     fallback_hits = _fanout_realestate_search(query, top_k)
     if not fallback_hits:
-        raise LookupError("No indexed real estate documents found for the requested scope.")
+        raise LookupError("No indexed documents found for the requested global scope.")
 
     return {
         "mode": "documents",
         "scope": normalized_scope,
-        "effective_scope": "realestate_global_fallback",
+        "effective_scope": "global_fallback_realestate_project_fanout",
         "retrieved_documents": fallback_hits,
     }

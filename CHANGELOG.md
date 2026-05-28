@@ -19,6 +19,9 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Upload metadata persistence (file paths, size, extraction status, chunks indexed).
 - Postgres-ready DB configuration via `DATABASE_URL` with SQLite fallback for local MVP.
 - Long-term deployment note: Docker Compose is a supported future deployment option.
+- Upload taxonomy fields: `scope_type`, `scope_id`, `document_type` (backend + frontend).
+- Global shared retrieval table `global_brain` for cross-domain global chat context.
+- Optional chat metadata filters (`scope_type_filter`, `scope_id_filter`, `document_type_filter`).
 
 ### Changed
 - Upload endpoint validates `project_type` and persists project metadata.
@@ -27,6 +30,8 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Branch-first workflow is now explicitly mandatory in project guidelines.
 - Upload indexing now mirrors project chunks into shared table `realestate_global`.
 - Upload now returns explicit `422` errors for unsupported file types or failed extraction.
+- Upload processing now catches parser exceptions consistently and returns actionable error details instead of opaque failures.
+- Backend CORS defaults now allow both `http://localhost:3000` and `http://127.0.0.1:3000` (override via `CORS_ALLOW_ORIGINS`).
 
 ### Removed
 - Runtime artifacts from version control tracking (kept locally).

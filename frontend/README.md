@@ -1,6 +1,7 @@
 # Frontend MVP
 
 Next.js + TypeScript frontend for the Family Office Brain MVP.
+UI stack: TailwindCSS + shadcn/ui (Radix) + lucide-react.
 
 ## Local Run
 
@@ -14,6 +15,20 @@ Next.js + TypeScript frontend for the Family Office Brain MVP.
 
 ## Pages
 
-- `/projects`: upload + project list
+- `/brain`: single global chat across the overall knowledge base
+- `/projects`: upload + project workspaces split into `bestand` and `geplant`
 - `/projects/[projectName]`: project details + project-scoped chat
-- `/workspace`: `realestate_global` and `global` chat scopes
+- `/workspace`: legacy alias redirecting to `/brain`
+
+## UI Structure
+
+- App shell with sidebar + topbar in `app/layout.tsx`
+- Shared design primitives in `components/ui/*`
+- Reusable app components in `components/app/*`
+
+## Upload Metadata
+
+The upload form supports structured ingestion metadata:
+- `scope_type`: `project` | `domain` | `global`
+- `scope_id`: identifier inside the scope
+- `document_type`: semantic type like `expose`, `bilanz`, `versicherung`

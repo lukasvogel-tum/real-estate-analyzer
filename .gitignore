@@ -142,6 +142,7 @@ backend/lancedb/
 backend/projects/**/files/
 backend/projects/**/text/
 backend/projects/_registry.json
+backend/scopes/
 backend/metadata.db
 backend/metadata.db-*
 projects/
@@ -153,9 +154,15 @@ projects/
 .idea/
 .DS_Store
 Thumbs.db
+/nul
+/__init__.py
 
 # Node / Next.js
 frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/.turbo/
+
+# Keep frontend source lib folder tracked (overrides generic Python lib/ rule).
+!frontend/lib/
+!frontend/lib/**
