@@ -6,7 +6,6 @@ import {
   ArrowRight,
   Building2,
   Clock3,
-  FileStack,
   FolderClosed,
   Home,
   Plus,

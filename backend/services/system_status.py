@@ -1,7 +1,10 @@
 from services.graph_db import get_graph_status
 from services.metadata_db import get_metadata_overview
 from services.project_registry import list_projects
-from services.vectorstore import get_global_brain_vectorstore, get_realestate_global_vectorstore
+from services.vectorstore import (
+    has_global_brain_vectorstore,
+    has_realestate_global_vectorstore,
+)
 
 
 def get_knowledge_status() -> dict:
@@ -14,8 +17,8 @@ def get_knowledge_status() -> dict:
         },
         "metadata": metadata_overview,
         "vectorstores": {
-            "realestate_global_available": get_realestate_global_vectorstore() is not None,
-            "global_brain_available": get_global_brain_vectorstore() is not None,
+            "realestate_global_available": has_realestate_global_vectorstore(),
+            "global_brain_available": has_global_brain_vectorstore(),
         },
         "graph": graph_status,
     }

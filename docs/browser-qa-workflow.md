@@ -15,18 +15,18 @@ Result: the Browser-QA agent is defined and ready, but browser automation is not
 
 ## Safe Local Startup
 
-### Backend
+### Full App
 
 ```powershell
-cd backend
-..\.venv\Scripts\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+make run
 ```
 
-### Frontend
+This starts the backend and frontend together and writes logs to `.dev/`.
+
+Stop after QA:
 
 ```powershell
-cd frontend
-npm.cmd run dev
+make stop
 ```
 
 ### Optional Graph

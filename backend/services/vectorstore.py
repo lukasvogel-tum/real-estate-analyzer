@@ -38,6 +38,22 @@ def _get_vectorstore_for_table(table_name: str):
     return None
 
 
+def has_vectorstore_table(table_name: str) -> bool:
+    """Return table availability without initializing embeddings."""
+    db = _connect_db()
+    return table_name in _get_table_names(db)
+
+
+def has_realestate_global_vectorstore() -> bool:
+    """Check whether the shared real-estate table exists."""
+    return has_vectorstore_table(REALESTATE_GLOBAL_TABLE)
+
+
+def has_global_brain_vectorstore() -> bool:
+    """Check whether the shared global brain table exists."""
+    return has_vectorstore_table(GLOBAL_BRAIN_TABLE)
+
+
 def get_vectorstore(project_name: str):
     """Laedt einen existierenden VectorStore fuer ein Projekt."""
     return _get_vectorstore_for_table(get_table_name(project_name))

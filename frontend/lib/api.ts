@@ -43,7 +43,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
       if (typeof errorBody?.detail === "string") {
         detail = errorBody.detail;
       }
-    } catch (_error) {
+    } catch {
       // Keep the status message fallback.
     }
     throw new ApiError(response.status, detail);

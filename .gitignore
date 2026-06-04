@@ -137,6 +137,7 @@ dmypy.json
 cython_debug/
 
 # Project runtime artifacts (local only)
+.dev/
 lancedb/
 backend/lancedb/
 backend/projects/**/files/

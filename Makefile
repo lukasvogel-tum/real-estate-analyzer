@@ -3,13 +3,18 @@ SHELL := cmd.exe
 
 PYTHON := .venv\Scripts\python.exe
 NPM := npm.cmd
+POWERSHELL := powershell.exe
 
 # Start everything
-.PHONY: run backend frontend
+.PHONY: run stop restart backend frontend
 
 run:
-	start "Backend" cmd /k "cd backend && ..\$(PYTHON) -m uvicorn main:app --reload --host 127.0.0.1 --port 8000"
-	start "Frontend" cmd /k "cd frontend && $(NPM) run dev"
+	$(POWERSHELL) -NoProfile -ExecutionPolicy Bypass -File scripts\start_dev.ps1
+
+stop:
+	$(POWERSHELL) -NoProfile -ExecutionPolicy Bypass -File scripts\stop_dev.ps1
+
+restart: stop run
 
 backend:
 	cd backend && ..\$(PYTHON) -m uvicorn main:app --reload --host 127.0.0.1 --port 8000

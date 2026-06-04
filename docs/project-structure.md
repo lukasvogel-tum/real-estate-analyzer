@@ -9,13 +9,36 @@ This repository is a two-process local application:
 - `scripts/`: local helper scripts for Neo4j lifecycle
 - `docs/`: project and workflow documentation
 
-There is currently no single root command that boots the whole stack. Backend and frontend are started separately. Neo4j is optional.
+The local app has a root developer command for the normal two-process stack. Neo4j is optional and still started separately when graph testing is needed.
 
 ## Runtime Commands
 
-### Backend
+### Full Local App
 
 From repo root:
+
+```powershell
+make run
+```
+
+Notes:
+
+- Starts the FastAPI backend at `http://127.0.0.1:8000`.
+- Starts the Next.js frontend at `http://127.0.0.1:3000`.
+- Writes PID and log files under `.dev/`.
+- Stop both managed processes with `make stop`.
+- Restart both with `make restart`.
+- `make run` is a local developer convenience wrapper. It does not containerize the app; it uses the existing `.venv`, `npm.cmd`, local runtime data, and local environment files.
+
+### Backend Only
+
+From repo root:
+
+```powershell
+make backend
+```
+
+Equivalent manual command:
 
 ```powershell
 cd backend
@@ -24,17 +47,16 @@ cd backend
 
 Notes:
 
-- `backend/.env` is loaded automatically when running from `backend/`.
+- `backend/.env` is loaded automatically by the backend.
 - `OPENAI_API_KEY` is required for embedding/chat behavior that hits OpenAI.
 - Graph behavior is optional and controlled by `GRAPH_ENABLED` and `NEO4J_*`.
 
-### Frontend
+### Frontend Only
 
 From repo root:
 
 ```powershell
-cd frontend
-npm.cmd run dev
+make frontend
 ```
 
 Notes:
@@ -175,6 +197,5 @@ These are important when planning future Codex work:
 
 - No committed backend unit/integration test suite
 - No CI configuration in this repo
-- No root one-command dev orchestrator
 - No committed Playwright or browser-automation runner yet
 - Browser-QA therefore depends on future setup or manual verification for now
