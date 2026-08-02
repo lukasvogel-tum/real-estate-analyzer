@@ -7,7 +7,7 @@ services:
       - "7474:7474"
       - "7687:7687"
     environment:
-      NEO4J_AUTH: "${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-familyoffice_local_dev_password}"
+      NEO4J_AUTH: "${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in backend/.env}"
       NEO4J_dbms_default__database: "${NEO4J_DATABASE:-neo4j}"
       NEO4J_server_memory_heap_initial__size: 512m
       NEO4J_server_memory_heap_max__size: 512m
@@ -21,7 +21,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "cypher-shell -a bolt://localhost:7687 -u ${NEO4J_USERNAME:-neo4j} -p ${NEO4J_PASSWORD:-familyoffice_local_dev_password} 'RETURN 1;' || exit 1",
+          "cypher-shell -a bolt://localhost:7687 -u ${NEO4J_USERNAME:-neo4j} -p ${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in backend/.env} 'RETURN 1;' || exit 1",
         ]
       interval: 15s
       timeout: 10s
