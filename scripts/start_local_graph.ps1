@@ -2,11 +2,9 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $repoRoot "backend\.env"
-$exampleEnvFile = Join-Path $repoRoot "backend\.env.example"
 
 if (-not (Test-Path $envFile)) {
-    Write-Host "backend/.env not found. Falling back to backend/.env.example for local graph startup."
-    $envFile = $exampleEnvFile
+    throw "backend/.env not found. Copy backend/.env.example to backend/.env, set NEO4J_PASSWORD, and run this script again."
 }
 
 Write-Host "Starting Neo4j with env file: $envFile"
