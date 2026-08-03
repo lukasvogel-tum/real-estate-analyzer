@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background-default: 210 33% 98%;
+    --background-muted: 214 24% 96%;
+    --background: var(--background-default);
+    --foreground: 215 25% 17%;
+    --text-main: 215 25% 17%;
+    --text-muted: 215 13% 43%;
+    --card: 0 0% 100%;
+    --card-foreground: var(--text-main);
+    --popover: 0 0% 100%;
+    --popover-foreground: var(--text-main);
+    --primary: 210 100% 12%;
+    --primary-hover: 210 100% 16%;
+    --primary-active: 210 100% 10%;
+    --primary-soft: 211 56% 95%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 22% 95%;
+    --secondary-foreground: var(--text-main);
+    --muted: var(--background-muted);
+    --muted-foreground: var(--text-muted);
+    --accent: 212 42% 94%;
+    --accent-foreground: var(--text-main);
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border-subtle: 214 20% 88%;
+    --border: var(--border-subtle);
+    --input: var(--border-subtle);
+    --ring: var(--primary);
+    --radius: 0.9rem;
+    --surface-soft: 212 35% 97%;
+    --surface-tint: 211 31% 94%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body {
+    min-height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    text-rendering: optimizelegibility;
+    font-feature-settings: "ss01" 1, "cv02" 1, "cv03" 1;
+  }
+
+  ::selection {
+    background: hsl(var(--primary-soft));
+    color: hsl(var(--primary));
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply tracking-tight;
+  }
+
+  h1,
+  h2 {
+    letter-spacing: -0.02em;
+  }
+}

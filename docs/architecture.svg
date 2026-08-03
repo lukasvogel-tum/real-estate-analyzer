@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Real Estate Analyzer architecture</title>
+  <desc id="desc">A Next.js frontend calls a FastAPI backend, which coordinates retrieval, metadata, and an optional Neo4j graph.</desc>
+  <defs>
+    <linearGradient id="blue" x1="0" x2="1">
+      <stop offset="0" stop-color="#dbeafe"/>
+      <stop offset="1" stop-color="#eff6ff"/>
+    </linearGradient>
+    <linearGradient id="slate" x1="0" x2="1">
+      <stop offset="0" stop-color="#e2e8f0"/>
+      <stop offset="1" stop-color="#f8fafc"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" x2="1">
+      <stop offset="0" stop-color="#dcfce7"/>
+      <stop offset="1" stop-color="#f0fdf4"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <style>
+      .box { stroke: #94a3b8; stroke-width: 2; rx: 18; }
+      .title { font: 700 24px system-ui, sans-serif; fill: #0f172a; }
+      .label { font: 600 17px system-ui, sans-serif; fill: #0f172a; }
+      .detail { font: 14px system-ui, sans-serif; fill: #334155; }
+      .arrow { stroke: #64748b; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="1200" height="520" fill="#ffffff"/>
+  <text x="60" y="58" class="title">Real Estate Analyzer</text>
+  <text x="60" y="86" class="detail">Scoped document intelligence with evidence-backed retrieval</text>
+
+  <rect x="60" y="160" width="250" height="190" fill="url(#blue)" class="box"/>
+  <text x="88" y="205" class="label">Web workspace</text>
+  <text x="88" y="240" class="detail">Next.js + React</text>
+  <text x="88" y="266" class="detail">Project dashboards</text>
+  <text x="88" y="292" class="detail">Upload + scoped chat</text>
+  <text x="88" y="318" class="detail">Tailwind + shadcn/ui</text>
+
+  <rect x="475" y="145" width="250" height="220" fill="url(#slate)" class="box"/>
+  <text x="503" y="190" class="label">FastAPI backend</text>
+  <text x="503" y="225" class="detail">Scope routing</text>
+  <text x="503" y="251" class="detail">Document extraction</text>
+  <text x="503" y="277" class="detail">RAG orchestration</text>
+  <text x="503" y="303" class="detail">Evidence + sources</text>
+  <text x="503" y="329" class="detail">Knowledge status API</text>
+
+  <rect x="890" y="90" width="250" height="130" fill="url(#green)" class="box"/>
+  <text x="918" y="135" class="label">Retrieval layer</text>
+  <text x="918" y="170" class="detail">LangChain + LanceDB</text>
+  <text x="918" y="196" class="detail">OpenAI embeddings</text>
+
+  <rect x="890" y="280" width="250" height="130" fill="url(#green)" class="box"/>
+  <text x="918" y="325" class="label">Knowledge layer</text>
+  <text x="918" y="360" class="detail">SQLAlchemy / SQLite</text>
+  <text x="918" y="386" class="detail">Optional Neo4j graph</text>
+
+  <path d="M310 255 H465" class="arrow"/>
+  <path d="M725 205 H880" class="arrow"/>
+  <path d="M725 305 H880" class="arrow"/>
+  <text x="348" y="240" class="detail">HTTP / JSON</text>
+  <text x="760" y="190" class="detail">chunks</text>
+  <text x="760" y="290" class="detail">metadata</text>
+</svg>
