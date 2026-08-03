@@ -1,6 +1,6 @@
 # Real Estate Analyzer
 
-[![CI](https://github.com/sakulvo/real-estate-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/sakulvo/real-estate-analyzer/actions/workflows/ci.yml)
+[![CI](https://github.com/lukasvogel-tum/real-estate-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/lukasvogel-tum/real-estate-analyzer/actions/workflows/ci.yml)
 
 A project-scoped document intelligence workspace for real-estate analysis. The application combines document ingestion, evidence-backed retrieval, structured metadata, and an optional knowledge graph in a focused web interface.
 
@@ -33,7 +33,7 @@ A project-scoped document intelligence workspace for real-estate analysis. The a
 PowerShell:
 
 ```powershell
-git clone https://github.com/sakulvo/real-estate-analyzer.git
+git clone https://github.com/lukasvogel-tum/real-estate-analyzer.git
 cd real-estate-analyzer
 
 python -m venv .venv
